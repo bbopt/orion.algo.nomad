@@ -1,0 +1,9 @@
+experiment:
+    name: orion_meshadaptivedirectsearch_test
+    max_trials: 5
+    algorithms:
+      MeshAdaptiveDirectSearch: {}
+        # NOTE: Add arguments here if necessary
+
+database:
+  type: 'EphemeralDB'
