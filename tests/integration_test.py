@@ -9,8 +9,8 @@ import orion.core.cli
 import pytest
 from orion.algo.space import Integer, Real, Space
 from orion.client import create_experiment
-from orion.core.utils.tests import OrionState
 from orion.core.worker.primary_algo import PrimaryAlgo
+from orion.testing.state import OrionState
 
 
 # pylint:disable=unused-argument
@@ -177,12 +177,12 @@ def test_optimizer_actually_optimize(monkeypatch):
                 "./benchmark/meshadaptivedirectsearch.yaml",
                 "./benchmark/rosenbrock.py",
                 "--max-trials",
-                100,
+                "100",
                 "-x~uniform(-50, 50)",
             ]
         )
 
-        exp = create_experiment(name="exp")
+        exp = create_experiment(name="orion_meshadaptivedirectsearch_test")
 
         objective = exp.stats["best_evaluation"]
 
