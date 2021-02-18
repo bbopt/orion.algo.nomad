@@ -8,7 +8,7 @@ import numpy
 import orion.core.cli
 import pytest
 from orion.algo.space import Integer, Real, Space
-from orion.client import create_experiment
+from orion.client import get_experiment
 from orion.core.worker.primary_algo import PrimaryAlgo
 from orion.testing.state import OrionState
 
@@ -182,7 +182,7 @@ def test_optimizer_actually_optimize(monkeypatch):
             ]
         )
 
-        exp = create_experiment(name="orion_meshadaptivedirectsearch_test")
+        exp = get_experiment(name="orion_meshadaptivedirectsearch_test")
 
         objective = exp.stats["best_evaluation"]
 
