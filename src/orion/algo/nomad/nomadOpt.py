@@ -11,12 +11,16 @@ TODO: Write long description
 """
 import numpy as np
 
+import threading
+import queue
+import multiprocessing
+
 from orion.algo.base import BaseAlgorithm
 from orion.core.utils.points import flatten_dims, regroup_dims
 
 from PyNomad import optimize as nomad_solve
 
-class PyNomadOptimizer(BaseAlgorithm):
+class MeshAdaptiveDirectSearch(BaseAlgorithm):
     """Nomad is a Mesh Adaptive Direct Search (MADS) algorithm for blackbox optimization.
     
     For more information about MADS
@@ -31,12 +35,14 @@ class PyNomadOptimizer(BaseAlgorithm):
     
     """
 
+    requires_dist = "Linear"
+
     def __init__(self, space, seed=0):
-        super(PyNomadOptimizer, self).__init__(space, seed=seed)
+        super(MeshAdaptiveDirectSearch, self).__init__(space, seed=seed)
         
         # Create Nomad parameters
         # bb_input_type_string = 'BB_INPUT_TYPE ( '
-        dimension_string = 'DIMENSION '+ len(self.space.values())
+        dimension_string = 'DIMENSION '+ str(len(self.space.values()))
         
         # Todo
         max_bb_eval_string = 'MAX_BB_EVAL 10'
@@ -49,15 +55,15 @@ class PyNomadOptimizer(BaseAlgorithm):
         
         lb = [] # Todo
         ub = [] # Todo
-        x0 = [] # Todo or use LH Sampling with n_initial_points
+        x0 = [0,0] # Todo or use LH Sampling with n_initial_points
         
         
         # Todo manage variable type -> bb_input_type
         for dimension in self.space.values():
 
-            if dimension.type != 'fidelity' and \
-                    dimension.prior_name not in ['uniform', 'int_uniform']:
-                raise ValueError("Nomad now only supports uniform and uniform discrete as prior.")
+#            if dimension.type != 'fidelity' and \
+#                    dimension.prior_name not in ['uniform', 'int_uniform']:
+#                raise ValueError("Nomad now only supports uniform and uniform discrete as prior.")
 
             shape = dimension.shape
             if shape and len(shape) != 1:
@@ -83,6 +89,8 @@ class PyNomadOptimizer(BaseAlgorithm):
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
         
+        print(params)
+        
         # start background thread
         self.nomad_process = multiprocessing.Process(target=nomad_solve, args=(self.bb_fct, x0, lb, ub, params,))
         self.nomad_process.start()
@@ -96,7 +104,8 @@ class PyNomadOptimizer(BaseAlgorithm):
     # Nomad solve callback objective function
     def bb_fct(self, x):
         try:
-            n_values = x.get_n()
+            n_pts = 1
+            n_values = x.size()
 
             dim_pb = len(self.space.values())
             
@@ -110,8 +119,8 @@ class PyNomadOptimizer(BaseAlgorithm):
                 candidates.append([x.get_coord(j) for j in range(i*dim_pb,(i+1)*dim_pb)])
             
             #  print("candidates")
-            #  for candidate in candidates:
-            #      print(candidate)
+            for candidate in candidates:
+                print(candidate)
             
             self.inputs_queue.put(candidates)
             self.inputs_queue.join()
@@ -125,7 +134,7 @@ class PyNomadOptimizer(BaseAlgorithm):
             # returns observations to the blackbox
             outputs_candidates = self.outputs_queue.get()
             for output_val in outputs_candidates:
-                x.set_bb_output(i, output_val)
+                x.setBBO(str(output_val).encode("UTF-8"), B"OBJ")
 
             # task finish
             self.outputs_queue.task_done()
@@ -183,7 +192,7 @@ class PyNomadOptimizer(BaseAlgorithm):
         New parameters must be compliant with the problem's domain `orion.algo.space.Space`.
 
         """
-        
+
         if num > 1:
             raise ValueError("Nomad should suggest only one point.")
           
@@ -193,18 +202,18 @@ class PyNomadOptimizer(BaseAlgorithm):
         # Wait until Nomad gives candidates
         while self.inputs_queue.empty():
             continue
-        
+            
         # collect candidates from objective callback function
         candidates = self.inputs_queue.get()
             
         assert len(candidates) == 1, "Only one candidate must be provided !"
 
         # Todo manage prior conversion : candidates -> samples
-        
+        samples = []
         for point in candidates:
             point = regroup_dims(point, self.space)
             samples.append(point)
-            
+
         return samples
 
     def observe(self, points, results):
@@ -254,7 +263,7 @@ class PyNomadOptimizer(BaseAlgorithm):
             self.outputs_queue.join()
             print("Observation passed back to Nomad!")
         
-        super(TPE, self).observe(points, results)
+        super(MeshAdaptiveDirectSearch, self).observe(points, results)
 
     @property
     def is_done(self):
