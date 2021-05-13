@@ -25,7 +25,8 @@ def rosenbrock_function(x, y):
 def space():
     """Return an optimization space"""
     space = Space()
-    dim1 = Integer("yolo1", "uniform", -3, 6)
+    # dim1 = Integer("yolo1", "uniform", -3, 6)
+    dim1 = Real("yolo1", "uniform", -3, 6)
     space.register(dim1)
     dim2 = Real("yolo2", "uniform", 0, 1)
     space.register(dim2)

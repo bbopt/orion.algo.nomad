@@ -11,14 +11,15 @@ TODO: Write long description
 """
 import numpy as np
 
-import threading
-import queue
-import multiprocessing
+#import threading
+#import queue
+#import multiprocessing
 
 from orion.algo.base import BaseAlgorithm
 from orion.core.utils.points import flatten_dims, regroup_dims
 
-from PyNomad import optimize as nomad_solve
+import PyNomad 
+
 
 class MeshAdaptiveDirectSearch(BaseAlgorithm):
     """Nomad is a Mesh Adaptive Direct Search (MADS) algorithm for blackbox optimization.
@@ -39,23 +40,40 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
     def __init__(self, space, seed=0):
         super(MeshAdaptiveDirectSearch, self).__init__(space, seed=seed)
+       
         
+        # For sampled point ids
+        self.sampled = set()
+ 
         # Create Nomad parameters
-        # bb_input_type_string = 'BB_INPUT_TYPE ( '
         dimension_string = 'DIMENSION '+ str(len(self.space.values()))
         
         # Todo
-        max_bb_eval_string = 'MAX_BB_EVAL 10'
+        max_bb_eval_string = 'MAX_BB_EVAL 5'
         
-        # lb_string = 'LOWER_BOUND ( '
-        # ub_string = 'UPPER_BOUND ( '
+        # Todo
+        lb_string = 'LOWER_BOUND ( '
+        ub_string = 'UPPER_BOUND ( '
+        for interval in self.space.interval():
+             lb_string += str(interval[0]) + ' '
+             ub_string += str(interval[1]) + ' '
+        lb_string += ' )'
+        ub_string += ' )'
+ 
         
-        params = [dimension_string,
-                  max_bb_eval_string]
-        
-        lb = [] # Todo
-        ub = [] # Todo
-        x0 = [0,0] # Todo or use LH Sampling with n_initial_points
+        # Todo
+        bbo_type_string = 'BB_OUTPUT_TYPE OBJ '         
+
+        cache_file_string = 'CACHE_FILE cache.txt'
+
+        #suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest
+        suggest_algo = 'LH_EVAL 5'
+
+        # IMPORTANT
+	# Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
+        self.seed = seed       
+ 
+        self.params = ['DISPLAY_DEGREE 2', dimension_string, max_bb_eval_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
         
         
         # Todo manage variable type -> bb_input_type
@@ -79,72 +97,18 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 #            bb_input_type_string += ' )'
 
 
-        # queues to communicate between threads
-        self.inputs_queue = multiprocessing.JoinableQueue()
-        self.outputs_queue = multiprocessing.JoinableQueue()
-        
         # counter to deal with number of iterations: needed to properly kill the daemon thread
         self.n_iters = 0
 
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
         
-        print(params)
-        
-        # start background thread
-        self.nomad_process = multiprocessing.Process(target=nomad_solve, args=(self.bb_fct, x0, lb, ub, params,))
-        self.nomad_process.start()
+        print(self.params)
         
         
     # Not sure that it is needed
     def __del__(self):
-        self.nomad_process.terminate()
-        self.nomad_process.join()
-
-    # Nomad solve callback objective function
-    def bb_fct(self, x):
-        try:
-            n_pts = 1
-            n_values = x.size()
-
-            dim_pb = len(self.space.values())
-            
-            if ( n_values != dim_pb ):
-                print("Invalid number of values passed to bb")
-                return -1
-
-            # store the input points
-            candidates = []
-            for i in range(n_pts):
-                candidates.append([x.get_coord(j) for j in range(i*dim_pb,(i+1)*dim_pb)])
-            
-            #  print("candidates")
-            for candidate in candidates:
-                print(candidate)
-            
-            self.inputs_queue.put(candidates)
-            self.inputs_queue.join()
-
-            # wait until the blackbox returns observations
-            while self.outputs_queue.empty():
-                continue
-                
-            # Todo test the size of bb output
-
-            # returns observations to the blackbox
-            outputs_candidates = self.outputs_queue.get()
-            for output_val in outputs_candidates:
-                x.setBBO(str(output_val).encode("UTF-8"), B"OBJ")
-
-            # task finish
-            self.outputs_queue.task_done()
-
-        except:
-            print ("Unexpected error in bb()", sys.exc_info()[0])
-            return -1
-        return 1
-
-
+        pass
 
     def seed_rng(self, seed):
         """Seed the state of the random number generator.
@@ -153,23 +117,50 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         .. note:: This methods does nothing if the algorithm is deterministic.
         """
-        self.rng = seed
+        self.seed = seed
+        
+        PyNomad.setSeed(seed)
+        self.rng_state = PyNomad.getRNGState()
+          
+        # The seed is passed in the Nomad parameters.
+        #try:
+        #   found = False
+        #   for i in range(len(self.params)):
+        #      split_param = self.params[i].split()
+        #      if ( split_param[0].upper() == "SEED" ):
+        #         self.params[i] = "SEED " + str(seed)
+        #         found = True
+        #         break;
+        #   if not found:
+        #      self.params.append("SEED " + str(seed))
 
+	#   # Need to reset Nomad RNG to make active the change of seed
+        #   # print("Reset RNG",seed)
+        #   PyNomad.resetRandomNumberGenerator()
+        #except AttributeError:
+        #   pass 
+#
     @property
     def state_dict(self):
         """Return a state dict that can be used to reset the state of the algorithm."""
-        # TODO: Adapt this to your algo
-        return {'rng_state': self.rng.get_state()}
+        
+        self.rng_state = PyNomad.getRNGState()
+        #print(self.rng_state)
+        return {"rng_state": self.rng_state, "sampled": self.sampled}
 
     def set_state(self, state_dict):
         """Reset the state of the algorithm based on the given state_dict
 
         :param state_dict: Dictionary representing state of an algorithm
         """
-        # TODO: Adapt this to your algo
-        self.seed_rng(0)
-        self.rng.set_state(state_dict['rng_state'])
-
+                
+        self.rng_state = state_dict["rng_state"]
+        self.sampled = state_dict["sampled"]
+        
+        #print(self.rng_state)
+        PyNomad.setSeed(self.seed)
+        PyNomad.setRNGState(self.rng_state)
+        
     def suggest(self, num=1):
         """Suggest a `num`ber of new sets of parameters.
 
@@ -193,26 +184,24 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         """
 
-        if num > 1:
-            raise ValueError("Nomad should suggest only one point.")
-          
         # Clear candidates before a new suggestion
         self.stored_candidates.clear()
+       
+        print(self.params)
         
-        # Wait until Nomad gives candidates
-        while self.inputs_queue.empty():
-            continue
-            
-        # collect candidates from objective callback function
-        candidates = self.inputs_queue.get()
-            
-        assert len(candidates) == 1, "Only one candidate must be provided !"
+        self.stored_candidates = PyNomad.suggest(self.params)        
+ 
+        assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
+        print("Suggest: ",self.stored_candidates)
+        
         # Todo manage prior conversion : candidates -> samples
         samples = []
-        for point in candidates:
+        for point in self.stored_candidates:
             point = regroup_dims(point, self.space)
             samples.append(point)
+            if len(samples) >= num:   # return the number requested.
+                break;
 
         return samples
 
@@ -255,13 +244,35 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             idResult = np.argwhere(idPoint)[0].item() # pick the first index
             outputs_candidates.append(results[idResult])
         
-        # trigger callbacks
-        if self.nomad_process.is_alive():
-        #  if self.nomad_thread.is_alive():
-            self.outputs_queue.put(outputs_candidates)
-            # wait for completion
-            self.outputs_queue.join()
-            print("Observation passed back to Nomad!")
+        print("Call PyNomad observe")
+        updatedParams = PyNomad.observe(self.params,output_candidates,self.stored_candidates,"cache1.txt")
+
+    	# Decode bytes into string
+        for i in range(len(updatedParams)):
+            updatedParams[i] = updatedParams[i].decode('utf-8')
+        for i in range(len(self.params)):
+            if type(self.params[i]) is bytes:
+                self.params[i] = self.params[i].decode('utf-8')
+
+        print("Updated parameters by observe:\n",updatedParams)
+   
+
+    	# Replace updated params in params OR add if not present
+        for i in range(len(updatedParams)):
+            split1 = updatedParams[i].split()
+            found = False
+        for j in range(len(self.params)):
+            split2 = self.params[j].split()
+            if ( split2[0].upper() == split1[0].upper() ):
+                self.params[j] = updatedParams[i]
+                found = True
+                break;
+        if not found:
+            self.params.append(updatedParams[i])
+
+        print("Parameters for next iteration:\n",self.params)
+        print("\n")
+
         
         super(MeshAdaptiveDirectSearch, self).observe(points, results)
 
