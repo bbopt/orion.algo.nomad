@@ -5,5 +5,7 @@ experiment:
       MeshAdaptiveDirectSearch: {}
         # NOTE: Add arguments here if necessary
 
-database:
-  type: 'EphemeralDB'
+storage:
+  database:
+    type: EphemeralDB
+

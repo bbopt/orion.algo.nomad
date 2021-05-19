@@ -183,11 +183,7 @@ def test_optimizer_actually_optimize(monkeypatch):
             ]
         )
 
-<<<<<<< HEAD
-        #exp = create_experiment(name="exp")
-=======
         exp = get_experiment(name="orion_meshadaptivedirectsearch_test")
->>>>>>> main
 
         #objective = exp.stats["best_evaluation"]
 

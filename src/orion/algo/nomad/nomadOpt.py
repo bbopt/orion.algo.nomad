@@ -37,11 +37,20 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
     """
 
     requires_dist = "Linear"
+    requires_shape = "flattened"
+
+    # Flag to use LH_EVAL or MEGA_SEARCH_POLL
+    use_initial_params = True
 
     def __init__(self, space, seed=0):
         super(MeshAdaptiveDirectSearch, self).__init__(space, seed=seed)
-       
-        
+
+        print("Init called")
+
+        # Flag to use LH_EVAL or MEGA_SEARCH_POLL
+        #self.first_suggest = True
+        #self.first_suggestInt = 1
+
         # For sampled point ids
         self.sampled = set()
  
@@ -49,8 +58,9 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         dimension_string = 'DIMENSION '+ str(len(self.space.values()))
         
         # Todo
-        max_bb_eval_string = 'MAX_BB_EVAL 5'
-        
+        # max_bb_eval_string = 'MAX_BB_EVAL 5'
+                
+
         # Todo
         lb_string = 'LOWER_BOUND ( '
         ub_string = 'UPPER_BOUND ( '
@@ -64,38 +74,41 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         # Todo
         bbo_type_string = 'BB_OUTPUT_TYPE OBJ '         
 
-        cache_file_string = 'CACHE_FILE cache.txt'
+        self.cache_file_name = 'cache.txt'
+        cache_file_string = 'CACHE_FILE '+self.cache_file_name
 
-        #suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest
-        suggest_algo = 'LH_EVAL 5'
+        suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
+        first_suggest_algo = 'LH_EVAL ' + str(len(self.space.values())*2)
 
         # IMPORTANT
 	# Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
         self.seed = seed       
  
-        self.params = ['DISPLAY_DEGREE 2', dimension_string, max_bb_eval_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
-        
         
         # Todo manage variable type -> bb_input_type
+        bb_input_type_string = 'BB_INPUT_TYPE ( '
         for dimension in self.space.values():
 
-#            if dimension.type != 'fidelity' and \
-#                    dimension.prior_name not in ['uniform', 'int_uniform']:
-#                raise ValueError("Nomad now only supports uniform and uniform discrete as prior.")
+            if dimension.type != 'fidelity' and \
+                    dimension.prior_name not in ['uniform', 'int_uniform']:
+                raise ValueError("Nomad now only supports uniform and uniform discrete as prior.")
 
             shape = dimension.shape
             if shape and len(shape) != 1:
                 raise ValueError("Nomad now only supports 1D shape.")
 
-#            if dimension.type == 'real':
-#                bb_input_type_string += 'R '
-#            elif dimension.type == 'integer' and dimension.prior_name == 'int_uniform':
-#                bb_input_type_string += 'I '
-#            else:
-#                raise NotImplementedError()
-#
-#            bb_input_type_string += ' )'
+            if dimension.type == 'real':
+                bb_input_type_string += 'R '
+            elif dimension.type == 'integer' and dimension.prior_name == 'int_uniform':
+                bb_input_type_string += 'I '
+            else:
+                raise NotImplementedError()
 
+            bb_input_type_string += ' )'
+
+        self.base_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string ]
+        self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
+        self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
 
         # counter to deal with number of iterations: needed to properly kill the daemon thread
         self.n_iters = 0
@@ -103,8 +116,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
         
-        print(self.params)
-        
+        # print(self.params)
         
     # Not sure that it is needed
     def __del__(self):
@@ -160,8 +172,9 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         #print(self.rng_state)
         PyNomad.setSeed(self.seed)
         PyNomad.setRNGState(self.rng_state)
-        
-    def suggest(self, num=1):
+
+
+    def suggest(self, num=None):
         """Suggest a `num`ber of new sets of parameters.
 
         TODO: document how suggest work for this algo
@@ -186,11 +199,20 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         # Clear candidates before a new suggestion
         self.stored_candidates.clear()
-       
-        print(self.params)
-        
-        self.stored_candidates = PyNomad.suggest(self.params)        
- 
+
+        print(self)
+
+        print('Use initial params : ' , self.use_initial_params)
+        if self.use_initial_params:
+            print(self.initial_params)
+            self.stored_candidates = PyNomad.suggest(self.initial_params)
+            #self.first_suggest = False
+            #self.first_suggestInt = 0
+        else:
+            print(self.params)
+            self.stored_candidates = PyNomad.suggest(self.params)
+
+        # print('First suggest: ' , self.first_suggest)
         assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
         print("Suggest: ",self.stored_candidates)
@@ -200,9 +222,10 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         for point in self.stored_candidates:
             point = regroup_dims(point, self.space)
             samples.append(point)
-            if len(samples) >= num:   # return the number requested.
-                break;
+            # if len(samples) >= num:   # return the number requested.
+            #    break;
 
+        num = len(samples)
         return samples
 
     def observe(self, points, results):
@@ -235,17 +258,42 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         """
         assert len(points) == len(results), "The length is not the same"
-        
-        outputs_candidates = list()
-        
-        # collect outputs
-        for candidate in self.stored_candidates:
-            idPoint = [candidate == point for point in points]
-            idResult = np.argwhere(idPoint)[0].item() # pick the first index
-            outputs_candidates.append(results[idResult])
-        
+
+
+        print('observe, use_first_params=',self.use_initial_params)
+        candidates_outputs = list()
+        candidates = list()
+        for point, result in zip(points, results):
+
+            #if not self.has_suggested(point):
+            #    logger.info(
+            #        "Ignoring point %s because it was not sampled by current algo.",
+            #        point,
+            #    )
+            #    continue
+            tmp_outputs = list()
+            tmp_outputs.append(result['objective']) # TODO constraints
+
+            candidates_outputs.append(tmp_outputs) # TODO constraints
+            print(point)
+            print(flatten_dims(point,self.space))
+            flat_point = flatten_dims(point,self.space)
+            flat_point_tuple = list()
+            for x in flat_point:
+                 print(x) 
+                 flat_point_tuple.append(x)
+            print(flat_point_tuple)
+            candidates.append(flat_point_tuple)
+     
         print("Call PyNomad observe")
-        updatedParams = PyNomad.observe(self.params,output_candidates,self.stored_candidates,"cache1.txt")
+        print(candidates_outputs)
+        print(candidates)
+
+        if self.use_initial_params:
+             updatedParams = PyNomad.observe(self.initial_params,candidates,candidates_outputs,self.cache_file_name)
+             self.use_initial_params = False  # after initial observe we use only params
+        else:
+            updatedParams = PyNomad.observe(self.params,candidates,candidates_outputs,self.cache_file_name)
 
     	# Decode bytes into string
         for i in range(len(updatedParams)):
@@ -255,7 +303,6 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
                 self.params[i] = self.params[i].decode('utf-8')
 
         print("Updated parameters by observe:\n",updatedParams)
-   
 
     	# Replace updated params in params OR add if not present
         for i in range(len(updatedParams)):
@@ -273,8 +320,8 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         print("Parameters for next iteration:\n",self.params)
         print("\n")
 
-        
-        super(MeshAdaptiveDirectSearch, self).observe(points, results)
+        # Not sure that I need that
+        # super(MeshAdaptiveDirectSearch, self).observe(points, results)
 
     @property
     def is_done(self):
