@@ -18,7 +18,9 @@ import numpy as np
 from orion.algo.base import BaseAlgorithm
 from orion.core.utils.points import flatten_dims, regroup_dims
 
-import PyNomad 
+import os
+
+import PyNomad
 
 
 class MeshAdaptiveDirectSearch(BaseAlgorithm):
@@ -42,14 +44,12 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
     # Flag to use LH_EVAL or MEGA_SEARCH_POLL
     use_initial_params = True
 
+    nomad_seed = 1
+
     def __init__(self, space, seed=0):
         super(MeshAdaptiveDirectSearch, self).__init__(space, seed=seed)
 
         print("Init called")
-
-        # Flag to use LH_EVAL or MEGA_SEARCH_POLL
-        #self.first_suggest = True
-        #self.first_suggestInt = 1
 
         # For sampled point ids
         self.sampled = set()
@@ -75,13 +75,15 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         bbo_type_string = 'BB_OUTPUT_TYPE OBJ '         
 
         self.cache_file_name = 'cache.txt'
+        if os.path.exists(self.cache_file_name):
+            os.remove(self.cache_file_name)
         cache_file_string = 'CACHE_FILE '+self.cache_file_name
 
         suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
         first_suggest_algo = 'LH_EVAL ' + str(len(self.space.values())*2)
 
         # IMPORTANT
-	# Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
+	    # Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
         self.seed = seed       
  
         
@@ -106,9 +108,9 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
             bb_input_type_string += ' )'
 
-        self.base_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string ]
-        self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
-        self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
+        self.base_params = ['DISPLAY_DEGREE 3', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string ]
+        self.initial_params = ['DISPLAY_DEGREE 3', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
+        self.params = ['DISPLAY_DEGREE 3', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
 
         # counter to deal with number of iterations: needed to properly kill the daemon thread
         self.n_iters = 0
@@ -130,7 +132,9 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         .. note:: This methods does nothing if the algorithm is deterministic.
         """
         self.seed = seed
-        
+
+        print("Seed rng : ", seed)
+
         PyNomad.setSeed(seed)
         self.rng_state = PyNomad.getRNGState()
           
@@ -157,7 +161,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         """Return a state dict that can be used to reset the state of the algorithm."""
         
         self.rng_state = PyNomad.getRNGState()
-        #print(self.rng_state)
+        print("State dict : ",self.rng_state)
         return {"rng_state": self.rng_state, "sampled": self.sampled}
 
     def set_state(self, state_dict):
@@ -169,7 +173,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         self.rng_state = state_dict["rng_state"]
         self.sampled = state_dict["sampled"]
         
-        #print(self.rng_state)
+        print("Set state : ",state_dict)
         PyNomad.setSeed(self.seed)
         PyNomad.setRNGState(self.rng_state)
 
@@ -202,21 +206,32 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         print(self)
 
-        print('Use initial params : ' , self.use_initial_params)
+        # print('Use initial params : ' , self.use_initial_params)
+
+        # TEMP for testing
+        # MeshAdaptiveDirectSearch.nomad_seed += 1
+        #PyNomad.setSeed(MeshAdaptiveDirectSearch.nomad_seed)
+        #print(MeshAdaptiveDirectSearch.nomad_seed)
+        #print(PyNomad.getRNGState())
+        print('RNG State: ',self.rng_state)
+
         if self.use_initial_params:
-            print(self.initial_params)
-            self.stored_candidates = PyNomad.suggest(self.initial_params)
+            print("Params for suggest:",self.initial_params)
+            self.stored_candidates = PyNomad.suggest(self.initial_params, self.rng_state)
             #self.first_suggest = False
             #self.first_suggestInt = 0
         else:
-            print(self.params)
-            self.stored_candidates = PyNomad.suggest(self.params)
+            print("Params for suggest:", self.params)
+            self.stored_candidates = PyNomad.suggest(self.params, self.rng_state)
 
         # print('First suggest: ' , self.first_suggest)
         assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
         print("Suggest: ",self.stored_candidates)
-        
+
+        rngSeed=PyNomad.getRNGState()
+        print('PyNomad RNG seed :',rngSeed)
+
         # Todo manage prior conversion : candidates -> samples
         samples = []
         for point in self.stored_candidates:
@@ -275,14 +290,14 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             tmp_outputs.append(result['objective']) # TODO constraints
 
             candidates_outputs.append(tmp_outputs) # TODO constraints
-            print(point)
-            print(flatten_dims(point,self.space))
+            #print(point)
+            #print(flatten_dims(point,self.space))
             flat_point = flatten_dims(point,self.space)
             flat_point_tuple = list()
             for x in flat_point:
-                 print(x) 
+                 #print(x)
                  flat_point_tuple.append(x)
-            print(flat_point_tuple)
+            #print(flat_point_tuple)
             candidates.append(flat_point_tuple)
      
         print("Call PyNomad observe")
@@ -308,14 +323,14 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         for i in range(len(updatedParams)):
             split1 = updatedParams[i].split()
             found = False
-        for j in range(len(self.params)):
-            split2 = self.params[j].split()
-            if ( split2[0].upper() == split1[0].upper() ):
-                self.params[j] = updatedParams[i]
-                found = True
-                break;
-        if not found:
-            self.params.append(updatedParams[i])
+            for j in range(len(self.params)):
+                split2 = self.params[j].split()
+                if ( split2[0].upper() == split1[0].upper() ):
+                    self.params[j] = updatedParams[i]
+                    found = True
+                    break;
+            if not found:
+                self.params.append(updatedParams[i])
 
         print("Parameters for next iteration:\n",self.params)
         print("\n")
