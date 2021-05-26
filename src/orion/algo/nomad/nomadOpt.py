@@ -85,8 +85,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         # IMPORTANT
 	    # Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
         self.seed = seed       
- 
-        
+
         # Todo manage variable type -> bb_input_type
         bb_input_type_string = 'BB_INPUT_TYPE ( '
         for dimension in self.space.values():
@@ -106,20 +105,15 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             else:
                 raise NotImplementedError()
 
-            bb_input_type_string += ' )'
+        bb_input_type_string += ' )'
 
-        self.base_params = ['DISPLAY_DEGREE 3', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string ]
-        self.initial_params = ['DISPLAY_DEGREE 3', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
+        self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
         self.params = ['DISPLAY_DEGREE 3', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
-
-        # counter to deal with number of iterations: needed to properly kill the daemon thread
-        self.n_iters = 0
 
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
         
-        # print(self.params)
-        
+
     # Not sure that it is needed
     def __del__(self):
         pass
@@ -133,28 +127,10 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         """
         self.seed = seed
 
-        print("Seed rng : ", seed)
-
         PyNomad.setSeed(seed)
         self.rng_state = PyNomad.getRNGState()
-          
-        # The seed is passed in the Nomad parameters.
-        #try:
-        #   found = False
-        #   for i in range(len(self.params)):
-        #      split_param = self.params[i].split()
-        #      if ( split_param[0].upper() == "SEED" ):
-        #         self.params[i] = "SEED " + str(seed)
-        #         found = True
-        #         break;
-        #   if not found:
-        #      self.params.append("SEED " + str(seed))
 
-	#   # Need to reset Nomad RNG to make active the change of seed
-        #   # print("Reset RNG",seed)
-        #   PyNomad.resetRandomNumberGenerator()
-        #except AttributeError:
-        #   pass 
+        # print("Seed rng: ", seed,self.rng_state)
 #
     @property
     def state_dict(self):
@@ -173,8 +149,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         self.rng_state = state_dict["rng_state"]
         self.sampled = state_dict["sampled"]
         
-        print("Set state : ",state_dict)
-        PyNomad.setSeed(self.seed)
+        # print("Set state : ",state_dict)
         PyNomad.setRNGState(self.rng_state)
 
 
@@ -204,33 +179,21 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         # Clear candidates before a new suggestion
         self.stored_candidates.clear()
 
-        print(self)
 
         # print('Use initial params : ' , self.use_initial_params)
-
-        # TEMP for testing
-        # MeshAdaptiveDirectSearch.nomad_seed += 1
-        #PyNomad.setSeed(MeshAdaptiveDirectSearch.nomad_seed)
-        #print(MeshAdaptiveDirectSearch.nomad_seed)
-        #print(PyNomad.getRNGState())
-        print('RNG State: ',self.rng_state)
+        # print('RNG State: ',self.rng_state)
 
         if self.use_initial_params:
-            print("Params for suggest:",self.initial_params)
-            self.stored_candidates = PyNomad.suggest(self.initial_params, self.rng_state)
-            #self.first_suggest = False
-            #self.first_suggestInt = 0
+            # print("Params for suggest:",self.initial_params)
+            self.stored_candidates = PyNomad.suggest(self.initial_params)
         else:
-            print("Params for suggest:", self.params)
-            self.stored_candidates = PyNomad.suggest(self.params, self.rng_state)
+            # print("Params for suggest:", self.params)
+            self.stored_candidates = PyNomad.suggest(self.params)
 
         # print('First suggest: ' , self.first_suggest)
         assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
         print("Suggest: ",self.stored_candidates)
-
-        rngSeed=PyNomad.getRNGState()
-        print('PyNomad RNG seed :',rngSeed)
 
         # Todo manage prior conversion : candidates -> samples
         samples = []
@@ -290,14 +253,10 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             tmp_outputs.append(result['objective']) # TODO constraints
 
             candidates_outputs.append(tmp_outputs) # TODO constraints
-            #print(point)
-            #print(flatten_dims(point,self.space))
             flat_point = flatten_dims(point,self.space)
             flat_point_tuple = list()
             for x in flat_point:
-                 #print(x)
                  flat_point_tuple.append(x)
-            #print(flat_point_tuple)
             candidates.append(flat_point_tuple)
      
         print("Call PyNomad observe")
@@ -317,7 +276,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             if type(self.params[i]) is bytes:
                 self.params[i] = self.params[i].decode('utf-8')
 
-        print("Updated parameters by observe:\n",updatedParams)
+        # print("Updated parameters by observe:\n",updatedParams)
 
     	# Replace updated params in params OR add if not present
         for i in range(len(updatedParams)):
