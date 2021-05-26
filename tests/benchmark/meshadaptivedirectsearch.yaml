@@ -1,6 +1,6 @@
 experiment:
     name: orion_meshadaptivedirectsearch_test
-    max_trials: 5
+    max_trials: 10 
     algorithms:
       MeshAdaptiveDirectSearch: {}
         # NOTE: Add arguments here if necessary

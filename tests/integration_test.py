@@ -72,8 +72,8 @@ def test_optimizer_basic(monkeypatch):
                 "hunt",
                 "--config",
                 "./benchmark/meshadaptivedirectsearch.yaml",
-                "./benchmark/rosenbrock.py",
-                "-x~uniform(-5, 5)",
+                "./benchmark/modif_rosenbrock.py",
+                "-x~uniform(-5, 5, precision=None)",            
             ]
         )
 
@@ -89,7 +89,7 @@ def test_int(monkeypatch):
                 "hunt",
                 "--config",
                 "./benchmark/meshadaptivedirectsearch.yaml",
-                "./benchmark/rosenbrock.py",
+                "./benchmark/modif_rosenbrock.py",
                 "-x~uniform(-5, 5, discrete=True)",
             ]
         )

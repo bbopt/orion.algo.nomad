@@ -10,15 +10,10 @@
 TODO: Write long description
 """
 import numpy as np
-
-#import threading
-#import queue
-#import multiprocessing
+import os
 
 from orion.algo.base import BaseAlgorithm
 from orion.core.utils.points import flatten_dims, regroup_dims
-
-import os
 
 import PyNomad
 
@@ -44,12 +39,10 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
     # Flag to use LH_EVAL or MEGA_SEARCH_POLL
     use_initial_params = True
 
-    nomad_seed = 1
-
     def __init__(self, space, seed=0):
         super(MeshAdaptiveDirectSearch, self).__init__(space, seed=seed)
 
-        print("Init called")
+        # print("Init called")
 
         # For sampled point ids
         self.sampled = set()
@@ -60,8 +53,6 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         # Todo
         # max_bb_eval_string = 'MAX_BB_EVAL 5'
                 
-
-        # Todo
         lb_string = 'LOWER_BOUND ( '
         ub_string = 'UPPER_BOUND ( '
         for interval in self.space.interval():
@@ -69,9 +60,8 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
              ub_string += str(interval[1]) + ' '
         lb_string += ' )'
         ub_string += ' )'
- 
-        
-        # Todo
+
+        # Todo constraints
         bbo_type_string = 'BB_OUTPUT_TYPE OBJ '         
 
         self.cache_file_name = 'cache.txt'
@@ -87,11 +77,13 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         self.seed = seed       
 
         # Todo manage variable type -> bb_input_type
+        all_variables_are_granular = True
         bb_input_type_string = 'BB_INPUT_TYPE ( '
         for dimension in self.space.values():
 
             if dimension.type != 'fidelity' and \
                     dimension.prior_name not in ['uniform', 'int_uniform']:
+                # Todo all_variables_are_granular = False if loguniform
                 raise ValueError("Nomad now only supports uniform and uniform discrete as prior.")
 
             shape = dimension.shape
@@ -100,6 +92,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
             if dimension.type == 'real':
                 bb_input_type_string += 'R '
+                all_variables_are_granular = False
             elif dimension.type == 'integer' and dimension.prior_name == 'int_uniform':
                 bb_input_type_string += 'I '
             else:
@@ -107,8 +100,13 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         bb_input_type_string += ' )'
 
+        # if all_variables_are_granular:
+        #    self.max_calls_to_extra_suggest = 100 * pow(3,len(self.space.values())) # This value is MAX_EVAL in Nomad when all variables are granular
+        #else :
+        self.max_calls_to_extra_suggest = 10 # This is arbitrary
+
         self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
-        self.params = ['DISPLAY_DEGREE 3', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
+        self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
 
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
@@ -190,10 +188,16 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             # print("Params for suggest:", self.params)
             self.stored_candidates = PyNomad.suggest(self.params)
 
-        # print('First suggest: ' , self.first_suggest)
-        assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
-
         print("Suggest: ",self.stored_candidates)
+
+        # extra suggest with LH to force suggest of candidates
+        nb_suggest_tries = 0
+        while len(self.stored_candidates) == 0 and nb_suggest_tries < self.max_calls_to_extra_suggest:
+            self.stored_candidates = PyNomad.suggest(self.initial_params)
+            nb_suggest_tries += 1
+            print("Extra Suggest (LH): ",self.stored_candidates)
+
+        assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
         # Todo manage prior conversion : candidates -> samples
         samples = []
