@@ -123,8 +123,8 @@ def test_linear(monkeypatch):
                 "hunt",
                 "--config",
                 "./benchmark/meshadaptivedirectsearch.yaml",
-                "./benchmark/rosenbrock.py",
-                "-x~loguniform(1, 50, discrete=True)",
+                "./benchmark/modif_rosenbrock.py",
+                "-x~loguniform(1, 200, discrete=True)",
             ]
         )
 
@@ -176,10 +176,8 @@ def test_optimizer_actually_optimize(monkeypatch):
                 "hunt",
                 "--config",
                 "./benchmark/meshadaptivedirectsearch.yaml",
-                "./benchmark/rosenbrock.py",
-                "--max-trials",
-                "100",
-                "-x~uniform(-50, 50)",
+                "./benchmark/modif_rosenbrock.py",
+                "-x~uniform(-50, 50, precision=None)",
             ]
         )
 

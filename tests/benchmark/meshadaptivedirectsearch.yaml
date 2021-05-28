@@ -1,9 +1,11 @@
 experiment:
     name: orion_meshadaptivedirectsearch_test
-    max_trials: 10 
+    max_trials: 5 
     algorithms:
-      MeshAdaptiveDirectSearch: {}
-        # NOTE: Add arguments here if necessary
+      MeshAdaptiveDirectSearch: 
+        seed: 1
+        lh_eval_n_factor: 3
+        mega_search_poll: True   
 
 storage:
   database:

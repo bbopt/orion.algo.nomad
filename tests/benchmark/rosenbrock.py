@@ -28,11 +28,11 @@ def execute():
     inputs = parser.parse_args()
 
     # 2. Perform computations
-    print(inputs.x,inputs.x[1:-1])
+    #print(inputs.x,inputs.x[1:-1])
     x = numpy.fromstring(inputs.x[1:-1], sep=', ')
-    print(x)
+    #print(x)
     f = rosenbrock_function(x, inputs.y)
-    print(f)
+    #print(f)
 
     # 3. Gather and report results
     results = list()

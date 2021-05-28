@@ -20,6 +20,7 @@ def execute():
     parser = argparse.ArgumentParser()
     parser.add_argument('-x', type=float, required=True,
                         help="Representation of a floating number")
+
     inputs = parser.parse_args()
 
     # 2. Perform computations
