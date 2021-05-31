@@ -11,7 +11,8 @@ TODO: Write long description
 """
 import copy
 
-import numpy
+import numpy 
+import os
 
 from orion.algo.base import BaseAlgorithm
 from orion.core.utils.points import flatten_dims, regroup_dims
@@ -51,7 +52,7 @@ class nomad(BaseAlgorithm):
     # Global flag to stop when no points are suggestes
     no_candidates_suggested = False
 
-    def __init__(self, space, seed=None):
+    def __init__(self, space, seed=None, mega_search_poll=True, lh_eval_n_factor=3):
         super(nomad, self).__init__(space,seed=seed,
                                           mega_search_poll=mega_search_poll,
                                           lh_eval_n_factor=lh_eval_n_factor)
@@ -172,8 +173,13 @@ class nomad(BaseAlgorithm):
 
         .. note:: This methods does nothing if the algorithm is deterministic.
         """
-        # TODO: Adapt this to your algo
-        self.rng = numpy.random.RandomState(seed)
+        self.seed = seed
+
+        PyNomad.setSeed(seed)
+        self.rng_state = PyNomad.getRNGState()
+
+        # print("Seed rng: ", seed,self.rng_state)
+
 
     @property
     def state_dict(self):
@@ -181,7 +187,7 @@ class nomad(BaseAlgorithm):
 
         self.rng_state = PyNomad.getRNGState()
 
-        return {'rng_state': self.rng.get_state(), "_trials_info": copy.deepcopy(self._trials_info)}
+        return {'rng_state': self.rng_state, "_trials_info": copy.deepcopy(self._trials_info)}
 
 
     def set_state(self, state_dict):

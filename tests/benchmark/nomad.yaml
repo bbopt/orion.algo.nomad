@@ -7,5 +7,7 @@ experiment:
         lh_eval_n_factor: 3
         mega_search_poll: True
 
-database:
-  type: 'EphemeralDB'
+
+storage:
+  database:
+    type: EphemeralDB
