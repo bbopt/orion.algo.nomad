@@ -7,11 +7,11 @@
     :platform: Unix
     :synopsis: TODO
 
-TODO: Write long description
+Interface for MADS blackbox optimization algorithm from NOMAD software 
 """
 
 __descr__ = 'TODO'
-__license__ = 'BSD 3-Clause'
+__license__ = 'GNU LGPL'
 __author__ = u'Christophe Tribes'
 __author_short__ = u'CTribes'
 __author_email__ = 'christophe.tribes@polymtl.ca'
