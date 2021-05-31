@@ -234,7 +234,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             # print("Params for suggest:",self.initial_params)
             self.stored_candidates = PyNomad.suggest(self.initial_params)
         else:
-            # print("Params for suggest:", self.params)
+            print("Params for suggest:", self.params)
             self.stored_candidates = PyNomad.suggest(self.params)
 
         #print("Suggest: ",self.stored_candidates)
