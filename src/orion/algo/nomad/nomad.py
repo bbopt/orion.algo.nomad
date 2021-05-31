@@ -14,12 +14,15 @@ import copy
 import numpy
 
 from orion.algo.base import BaseAlgorithm
+from orion.core.utils.points import flatten_dims, regroup_dims
+
+import PyNomad
 
 
 class nomad(BaseAlgorithm):
     """Nomad is a Mesh Adaptive Direct Search (MADS) algorithm for blackbox optimization.
 
-    For more information about MADS
+    For more information about MADS and NOMAD: www.gerad.ca/nomad
 
     Parameters
     ----------
@@ -55,70 +58,58 @@ class nomad(BaseAlgorithm):
 
     @property
     def space(self):
-    """Return transformed space of PyNomad"""
+        """Return transformed space of PyNomad"""
         return self._space
 
     @space.setter
     def space(self, space):
-    """Set the space of PyNomad and initialize it"""
+        """Set the space of PyNomad and initialize it"""
         self._original = self._space
         self._space = space
         self._initialize(space)
 
-def _initialize(self, space):
+    def _initialize(self, space):
 
-    assert self.mega_search_poll, "For the moment PyNomad only works with mega_search_poll activated"
-    assert self.lh_eval_n_factor > 0, "For the moment PyNomad only works with lh_eval_n_factor>0"
+        assert self.mega_search_poll, "For the moment PyNomad only works with mega_search_poll activated"
+        assert self.lh_eval_n_factor > 0, "For the moment PyNomad only works with lh_eval_n_factor>0"
 
-    # For sampled point ids
-    self.sampled = set()
+        # For sampled point ids
+        self.sampled = set()
 
-    # print(space)
+        # print(space)
 
-    #
-    # Create Nomad parameters
-    #
+        #
+        # Create Nomad parameters
+        #
 
-    # Dimension, bounds and bb_input_type  for flattened space
-    dim = 0
-    dimension_string = 'DIMENSION '
-    lb_string = 'LOWER_BOUND ( '
-    ub_string = 'UPPER_BOUND ( '
-    all_variables_are_granular = True
-    bb_input_type_string = 'BB_INPUT_TYPE ( '
-    for val in self.space.values():
-        if val.type == "fidelity" :
-            raise ValueError( "PyNomad do not support fidelity type" )
+        # Dimension, bounds and bb_input_type  for flattened space
+        dim = 0
+        dimension_string = 'DIMENSION '
+        lb_string = 'LOWER_BOUND ( '
+        ub_string = 'UPPER_BOUND ( '
+        all_variables_are_granular = True
+        bb_input_type_string = 'BB_INPUT_TYPE ( '
+        for val in self.space.values():
+            if val.type == "fidelity" :
+                raise ValueError( "PyNomad do not support fidelity type" )
 
-        if val.prior_name not in [
-            "uniform",
-            "reciprocal",
-            "int_uniform",
-            "int_reciprocal",
-        ]:
-            raise ValueError(
-                "PyNomad now only supports uniform, loguniform, uniform discrete"
-                f" as prior: {val.prior_name}"
-            )
+            if val.prior_name not in [
+                "uniform",
+                "reciprocal",
+                "int_uniform",
+                "int_reciprocal",
+            ]:
+                raise ValueError(
+                    "PyNomad now only supports uniform, loguniform, uniform discrete"
+                    f" as prior: {val.prior_name}"
+                )
 
-        shape = val.shape
+            shape = val.shape
 
-        if shape and len(shape) != 1:
-            raise ValueError("Nomad now only supports 1D shape.")
-        elif len(shape) == 0 :
-            dim += 1
-            lb_string += str(val.interval()[0]) + ' '
-            ub_string += str(val.interval()[1]) + ' '
-            if val.type == 'real':
-                bb_input_type_string += 'R '
-                all_variables_are_granular = False
-            elif val.type == 'integer' :
-                bb_input_type_string += 'I '
-            else :
-                raise ValueError("PyNomad now only real and integer type ")
-        else :
-            dim += shape[0]
-            for s in range(shape[0]):
+            if shape and len(shape) != 1:
+                raise ValueError("Nomad now only supports 1D shape.")
+            elif len(shape) == 0 :
+                dim += 1
                 lb_string += str(val.interval()[0]) + ' '
                 ub_string += str(val.interval()[1]) + ' '
                 if val.type == 'real':
@@ -128,38 +119,50 @@ def _initialize(self, space):
                     bb_input_type_string += 'I '
                 else :
                     raise ValueError("PyNomad now only real and integer type ")
+            else :
+                dim += shape[0]
+                for s in range(shape[0]):
+                    lb_string += str(val.interval()[0]) + ' '
+                    ub_string += str(val.interval()[1]) + ' '
+                    if val.type == 'real':
+                        bb_input_type_string += 'R '
+                        all_variables_are_granular = False
+                    elif val.type == 'integer' :
+                        bb_input_type_string += 'I '
+                    else :
+                        raise ValueError("PyNomad now only real and integer type ")
 
-    dimension_string += str(dim)
-    lb_string += ' )'
-    ub_string += ' )'
-    bb_input_type_string += ' )'
+        dimension_string += str(dim)
+        lb_string += ' )'
+        ub_string += ' )'
+        bb_input_type_string += ' )'
 
-    # Todo constraints
-    bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
+        # Todo constraints
+        bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
 
-    self.cache_file_name = 'cache.txt'
-    if os.path.exists(self.cache_file_name):
-        os.remove(self.cache_file_name)
-    cache_file_string = 'CACHE_FILE '+self.cache_file_name
+        self.cache_file_name = 'cache.txt'
+        if os.path.exists(self.cache_file_name):
+            os.remove(self.cache_file_name)
+        cache_file_string = 'CACHE_FILE '+self.cache_file_name
 
-    suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
-    first_suggest_algo = 'LH_EVAL ' + str(len(self.space.values())*2)
+        suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
+        first_suggest_algo = 'LH_EVAL ' + str(len(self.space.values())*2)
 
-    # IMPORTANT
-    # Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
+        # IMPORTANT
+        # Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
 
-    # if all_variables_are_granular:
-    #    self.max_calls_to_extra_suggest = 100 * pow(3,len(self.space.values())) # This value is MAX_EVAL in Nomad when all variables are granular
-    #else :
-    self.max_calls_to_extra_suggest = 10 # This is arbitrary
+        # if all_variables_are_granular:
+        #    self.max_calls_to_extra_suggest = 100 * pow(3,len(self.space.values())) # This value is MAX_EVAL in Nomad when all variables are granular
+        #else :
+        self.max_calls_to_extra_suggest = 10 # This is arbitrary
 
-    self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
-    self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
+        self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
+        self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
 
-    # print(self.initial_params, self.params)
+        # print(self.initial_params, self.params)
 
-    # list to keep candidates for an evaluation
-    self.stored_candidates = list()
+        # list to keep candidates for an evaluation
+        self.stored_candidates = list()
 
 
     def seed_rng(self, seed):
