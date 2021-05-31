@@ -261,7 +261,7 @@ latex_elements = {
 latex_documents = [
   (master_doc, 'orion.algo.nomad.tex',
    u'Oríon algo nomad Documentation',
-   u'Nomad Team', 'manual'),
+   u'Christophe Tribes', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of

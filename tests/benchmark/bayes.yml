@@ -1,0 +1,6 @@
+experiment:
+    name: orion-with-bayes
+    algorithms: BayesianOptimizer
+
+database:
+  type: 'EphemeralDB'

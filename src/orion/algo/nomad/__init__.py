@@ -12,10 +12,10 @@ TODO: Write long description
 
 __descr__ = 'TODO'
 __license__ = 'BSD 3-Clause'
-__author__ = u'Nomad Team'
-__author_short__ = u'Nomad Team'
-__author_email__ = 'nomad@gerad.ca'
-__copyright__ = u'2021, Nomad Team'
+__author__ = u'Christophe Tribes'
+__author_short__ = u'CTribes'
+__author_email__ = 'christophe.tribes@polymtl.ca'
+__copyright__ = u'2021, Christophe Tribes'
 __url__ = 'https://github.com/ctribes/orion.algo.nomad'
 
 from ._version import get_versions

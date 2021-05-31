@@ -11,7 +11,6 @@ from orion.client import report_results
 def rosenbrock_function(x, y):
     """Evaluate a n-D rosenbrock function."""
     x = numpy.asarray(x)
-    #print(x,x[1:],x[:-1])
     summands = 100 * (x[1:] - x[:-1]**2)**2 + (1 - x[:-1])**2
     return numpy.sum(summands) + y**2
 
@@ -28,11 +27,8 @@ def execute():
     inputs = parser.parse_args()
 
     # 2. Perform computations
-    #print(inputs.x,inputs.x[1:-1])
     x = numpy.fromstring(inputs.x[1:-1], sep=', ')
-    #print(x)
     f = rosenbrock_function(x, inputs.y)
-    #print(f)
 
     # 3. Gather and report results
     results = list()

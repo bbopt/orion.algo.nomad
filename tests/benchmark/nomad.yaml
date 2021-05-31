@@ -1,0 +1,9 @@
+experiment:
+    name: orion_nomad_test
+    max_trials: 5
+    algorithms:
+      nomad: {}
+        # NOTE: Add arguments here if necessary
+
+database:
+  type: 'EphemeralDB'
