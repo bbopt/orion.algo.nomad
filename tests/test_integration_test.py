@@ -33,7 +33,7 @@ def space():
     return space
 
 def test_optimizer_basic():
-    """Check functionality of BayesianOptimizer wrapper for single shaped dimension."""
+    """Check functionality of Nomad Optimizer wrapper for single shaped dimension."""
 
     with OrionState(experiments=[], trials=[]):
 
@@ -41,7 +41,7 @@ def test_optimizer_basic():
             [
                 "hunt",
                 "--config",
-                "./benchmark/meshadaptivedirectsearch.yaml",
+                "./benchmark/nomad.yaml",
                 "./benchmark/modif_rosenbrock.py",
                 "-x~uniform(-5, 5, precision=None)",
             ]
@@ -50,7 +50,7 @@ def test_optimizer_basic():
 
 def test_seeding(space):
     """Verify that seeding makes sampling deterministic"""
-    optimizer = PrimaryAlgo(space, "meshadaptivedirectsearch")
+    optimizer = PrimaryAlgo(space, "nomad")
 
     optimizer.seed_rng(1)
     a = optimizer.suggest(1)[0]

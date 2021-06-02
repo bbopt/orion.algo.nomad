@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-:mod:`orion.algo.nomad.nomadOpt -- TODO
+:mod:`orion.algo.nomad.nomad -- TODO
 =============================================
 
-.. module:: nomadOpt
+.. module:: nomad
     :platform: Unix
     :synopsis: TODO
 
 TODO: Write long description
 """
-import numpy as np
+import copy
+
+import numpy 
 import os
 
 from orion.algo.base import BaseAlgorithm
@@ -18,11 +20,11 @@ from orion.core.utils.points import flatten_dims, regroup_dims
 import PyNomad
 
 
-class MeshAdaptiveDirectSearch(BaseAlgorithm):
+class nomad(BaseAlgorithm):
     """Nomad is a Mesh Adaptive Direct Search (MADS) algorithm for blackbox optimization.
-    
-    For more information about MADS
-    
+
+    For more information about MADS and NOMAD: www.gerad.ca/nomad
+
     Parameters
     ----------
     space: `orion.algo.space.Space`
@@ -30,11 +32,19 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
     seed: int
         Seed of Nomad random number generator.
         Default: 0
-    
+    mega_search_poll: bool
+        Use Mads mega search poll strategy to generate Points
+        Default: True
+    lh_eval_n_factor: into
+        Multiply the factor by n and obtain the number of latin hypercube
+        samples used in the initial phase
+
+
     """
 
     requires_dist = "linear"
     requires_shape = "flattened"
+    requires_type = None
 
     # Global flag to use LH_EVAL or MEGA_SEARCH_POLL
     use_initial_params = True
@@ -42,15 +52,10 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
     # Global flag to stop when no points are suggestes
     no_candidates_suggested = False
 
-    def __init__(self,
-                 space,
-                 seed=0,
-                 mega_search_poll=True,
-                 lh_eval_n_factor=2):
-        super(MeshAdaptiveDirectSearch, self).__init__(space,
-                                                       seed=seed,
-                                                       mega_search_poll=mega_search_poll,
-                                                       lh_eval_n_factor=lh_eval_n_factor)
+    def __init__(self, space, seed=None, mega_search_poll=True, lh_eval_n_factor=3):
+        super(nomad, self).__init__(space,seed=seed,
+                                          mega_search_poll=mega_search_poll,
+                                          lh_eval_n_factor=lh_eval_n_factor)
 
     @property
     def space(self):
@@ -134,7 +139,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         bb_input_type_string += ' )'
 
         # Todo constraints
-        bbo_type_string = 'BB_OUTPUT_TYPE OBJ '         
+        bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
 
         self.cache_file_name = 'cache.txt'
         if os.path.exists(self.cache_file_name):
@@ -145,7 +150,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         first_suggest_algo = 'LH_EVAL ' + str(len(self.space.values())*2)
 
         # IMPORTANT
-	    # Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
+        # Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
 
         # if all_variables_are_granular:
         #    self.max_calls_to_extra_suggest = 100 * pow(3,len(self.space.values())) # This value is MAX_EVAL in Nomad when all variables are granular
@@ -159,16 +164,12 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
-        
 
-    # Not sure that it is needed
-    def __del__(self):
-        pass
 
     def seed_rng(self, seed):
         """Seed the state of the random number generator.
 
-        :param seed: Integer seed for the Nomad random number generator.
+        :param seed: Integer seed for the random number generator.
 
         .. note:: This methods does nothing if the algorithm is deterministic.
         """
@@ -179,26 +180,27 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
 
         # print("Seed rng: ", seed,self.rng_state)
 
+
     @property
     def state_dict(self):
         """Return a state dict that can be used to reset the state of the algorithm."""
-        
+
         self.rng_state = PyNomad.getRNGState()
-        # print("State dict : ",self.rng_state)
-        return {"rng_state": self.rng_state, "sampled": self.sampled}
+
+        return {'rng_state': self.rng_state, "_trials_info": copy.deepcopy(self._trials_info)}
+
 
     def set_state(self, state_dict):
         """Reset the state of the algorithm based on the given state_dict
 
         :param state_dict: Dictionary representing state of an algorithm
         """
-                
+
         self.rng_state = state_dict["rng_state"]
-        self.sampled = state_dict["sampled"]
-        
+        self._trials_info = state_dict.get("_trials_info")
+
         # print("Set state : ",state_dict)
         PyNomad.setRNGState(self.rng_state)
-
 
     def suggest(self, num=None):
         """Suggest a `num`ber of new sets of parameters.
@@ -208,7 +210,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         Parameters
         ----------
         num: int, optional
-            Number of points to suggest. Defaults to 1.
+            Number of points to suggest. Defaults to None.
 
         Returns
         -------
@@ -263,10 +265,10 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
     def observe(self, points, results):
         """Observe evaluation `results` corresponding to list of `points` in
         space.
-        
+
         Feed an observation back to PyNomad.
 
-        Observe put points and corresponding results in Nomad cache file. Observe updates the mesh and frame size.
+        Observe puts points and corresponding results in Nomad cache file. Observe updates the mesh and frame size.
         The updated cache file and frame size are used by next suggest.
 
 
@@ -310,7 +312,7 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
             for x in flat_point:
                  flat_point_tuple.append(x)
             candidates.append(flat_point_tuple)
-     
+
         #print("Call PyNomad observe")
         #print(candidates_outputs)
         #print(candidates)
@@ -346,14 +348,11 @@ class MeshAdaptiveDirectSearch(BaseAlgorithm):
         #print("Parameters for next iteration:\n",self.params)
         #print("\n")
 
-        # Not sure that I need that
-        # super(MeshAdaptiveDirectSearch, self).observe(points, results)
-
     @property
     def is_done(self):
         """Return True, if an algorithm holds that there can be no further improvement."""
-
-        return self.no_candidates_suggested
+        # NOTE: Drop if base implementation is fine.
+        return self.no_candidates_suggested or super(nomad, self).is_done
 
     def score(self, point):
         """Allow algorithm to evaluate `point` based on a prediction about

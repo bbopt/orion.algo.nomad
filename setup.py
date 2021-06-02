@@ -19,15 +19,15 @@ setup_args = dict(
     description='TODO',
     long_description=open(os.path.join(repo_root, "README.rst")).read(),
     license='BSD-3-Clause',
-    author=u'Nomad Team',
-    author_email='nomad@gerad.ca',
+    author=u'Christophe Tribes',
+    author_email='christophe.tribes@polymtl.ca',
     url='https://github.com/ctribes/orion.algo.nomad',
     packages=['orion.algo.nomad'],
     package_dir={'': 'src'},
     include_package_data=True,
     entry_points={
         'OptimizationAlgorithm': [
-            'nomad_MeshAdaptiveDirectSearch = orion.algo.nomad.nomadOpt:MeshAdaptiveDirectSearch'
+            'nomad_nomad = orion.algo.nomad.nomad:nomad'
             ],
         },
     install_requires=['orion>=0.1.11', 'numpy'],

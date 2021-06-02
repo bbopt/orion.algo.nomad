@@ -1,0 +1,13 @@
+experiment:
+    name: orion_nomad_test
+    max_trials: 5
+    algorithms:
+      nomad:
+        seed: 1
+        lh_eval_n_factor: 3
+        mega_search_poll: True
+
+
+storage:
+  database:
+    type: EphemeralDB
