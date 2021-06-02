@@ -57,6 +57,7 @@ class nomad(BaseAlgorithm):
                                           mega_search_poll=mega_search_poll,
                                           lh_eval_n_factor=lh_eval_n_factor)
 
+
     @property
     def space(self):
         """Return transformed space of PyNomad"""
@@ -76,8 +77,6 @@ class nomad(BaseAlgorithm):
 
         # For sampled point ids
         self.sampled = set()
-
-        # print(space)
 
         #
         # Create Nomad parameters
@@ -106,7 +105,8 @@ class nomad(BaseAlgorithm):
                 )
 
             shape = val.shape
-
+            
+            
             if shape and len(shape) != 1:
                 raise ValueError("Nomad now only supports 1D shape.")
             elif len(shape) == 0 :
@@ -144,6 +144,7 @@ class nomad(BaseAlgorithm):
         self.cache_file_name = 'cache.txt'
         if os.path.exists(self.cache_file_name):
             os.remove(self.cache_file_name)
+            self.use_initial_params = True
         cache_file_string = 'CACHE_FILE '+self.cache_file_name
 
         suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
@@ -178,7 +179,7 @@ class nomad(BaseAlgorithm):
         PyNomad.setSeed(seed)
         self.rng_state = PyNomad.getRNGState()
 
-        # print("Seed rng: ", seed,self.rng_state)
+        print("Seed rng: ", seed,self.rng_state)
 
 
     @property
@@ -186,9 +187,10 @@ class nomad(BaseAlgorithm):
         """Return a state dict that can be used to reset the state of the algorithm."""
 
         self.rng_state = PyNomad.getRNGState()
+        print("State dict : ",self.rng_state)
+        # return {'rng_state': self.rng_state, 'use_initial_params': self.use_initial_params, "_trials_info": copy.deepcopy(self._trials_info)}
 
         return {'rng_state': self.rng_state, "_trials_info": copy.deepcopy(self._trials_info)}
-
 
     def set_state(self, state_dict):
         """Reset the state of the algorithm based on the given state_dict
@@ -198,8 +200,9 @@ class nomad(BaseAlgorithm):
 
         self.rng_state = state_dict["rng_state"]
         self._trials_info = state_dict.get("_trials_info")
+        # self.use_initial_params =state_dict.get("use_initial_params")
 
-        # print("Set state : ",state_dict)
+        print("Set state : ",state_dict)
         PyNomad.setRNGState(self.rng_state)
 
     def suggest(self, num=None):
@@ -230,23 +233,23 @@ class nomad(BaseAlgorithm):
 
 
         # print('Use initial params : ' , self.use_initial_params)
-        # print('RNG State: ',self.rng_state)
+        print('Suggest RNG State: ',self.rng_state)
 
         if self.use_initial_params:
-            # print("Params for suggest:",self.initial_params)
+            print("Initial Params for suggest:",self.initial_params)
             self.stored_candidates = PyNomad.suggest(self.initial_params)
         else:
             print("Params for suggest:", self.params)
             self.stored_candidates = PyNomad.suggest(self.params)
 
-        #print("Suggest: ",self.stored_candidates)
+        print("Suggest: ",self.stored_candidates)
 
         # extra suggest with LH to force suggest of candidates
         nb_suggest_tries = 0
-        while len(self.stored_candidates) == 0 and nb_suggest_tries < self.max_calls_to_extra_suggest:
-            self.stored_candidates = PyNomad.suggest(self.initial_params)
+        while len(self.stored_candidates) < num and nb_suggest_tries < self.max_calls_to_extra_suggest:
+            self.stored_candidates.extend(PyNomad.suggest(self.initial_params))
             nb_suggest_tries += 1
-            #print("Extra Suggest (LH): ",self.stored_candidates)
+            print("Extra Suggest (LH): ",self.stored_candidates)
 
         # assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
@@ -254,13 +257,18 @@ class nomad(BaseAlgorithm):
         samples = []
         for point in self.stored_candidates:
             point = regroup_dims(point, self.space)
+            self.register(point)
             samples.append(point)
-            # if len(samples) >= num:   # return the number requested.
-            #    break;
+            if len(samples) >= num:   # return the number requested.
+                break;
 
         num = len(samples)
         self.no_candidates_suggested = (num == 0 )
-        return samples
+
+        if samples:
+           return samples
+
+        return None
 
     def observe(self, points, results):
         """Observe evaluation `results` corresponding to list of `points` in
@@ -292,7 +300,7 @@ class nomad(BaseAlgorithm):
         """
         assert len(points) == len(results), "The length of results and points are not the same"
 
-        # print('observe, use_first_params=',self.use_initial_params)
+        #print('observe, use_first_params=',self.use_initial_params)
         candidates_outputs = list()
         candidates = list()
         for point, result in zip(points, results):
@@ -310,18 +318,28 @@ class nomad(BaseAlgorithm):
             flat_point = flatten_dims(point,self.space)
             flat_point_tuple = list()
             for x in flat_point:
-                 flat_point_tuple.append(x)
+                 #print(type(x))
+                 if type(x)==numpy.ndarray:
+                    assert x.size==1, "The length of the ndarray should be one"
+                    flat_point_tuple.append(numpy.float64(x))
+                 else:
+                    flat_point_tuple.append(x)
             candidates.append(flat_point_tuple)
 
-        #print("Call PyNomad observe")
-        #print(candidates_outputs)
-        #print(candidates)
+        print("Call PyNomad observe")
+        print(candidates_outputs)
+        print(candidates)
 
         if self.use_initial_params:
+             # print("Initial params:",self.initial_params)
              updatedParams = PyNomad.observe(self.initial_params,candidates,candidates_outputs,self.cache_file_name)
              self.use_initial_params = False  # after initial observe we use only params
         else:
-            updatedParams = PyNomad.observe(self.params,candidates,candidates_outputs,self.cache_file_name)
+             updatedParams = PyNomad.observe(self.params,candidates,candidates_outputs,self.cache_file_name)
+
+
+        super(nomad, self).observe(points, results) 
+
 
     	# Decode bytes into string
         for i in range(len(updatedParams)):
