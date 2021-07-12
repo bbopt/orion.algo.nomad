@@ -116,18 +116,10 @@ class nomad(BaseAlgorithm):
                 )
 
             shape = val.shape
-            print(val.cast([0]))
+            # print(val.reverse([0]))
             #print(val.reverse([0,1,2,3,4,5])) 
-            raise ValueError("Early stop")
-            if val.prior_name == "choices":
-                # Orion provides (see requires_type) a mapping for choices for suggest and observe
-                # print(val,val.interval)
-                dim += 1
-                lb_string += str(val.interval()[0]) + ' '
-                ub_string += str(val.interval()[1]) + ' '
-                bb_input_type_string += 'I '
-                # raise ValueError("Choices are being implemented")
-            
+            # raise ValueError("Early stop")
+
             if shape and len(shape) != 1:
                 raise ValueError("Nomad now only supports 1D shape.")
             elif len(shape) == 0 :
@@ -274,12 +266,18 @@ class nomad(BaseAlgorithm):
 
         # assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
-        # Todo manage prior conversion : candidates -> samples
+        # manage prior conversion : candidates -> samples
         samples = []
-        for val in self.space.values():
-            print(val.reverse([0,1]))
         for point in self.stored_candidates:
-            print(point)
+            # print(point)
+
+            # Convert to integer if necessary and assert that value is not changed
+            for i in range(len(point)):
+                if self.space.values()[i].type == 'integer':
+                    intVal=int(point[i])
+                    assert intVal==point[i], 'Suggest: point must be integer'
+                    point[i]=intVal
+
             point = regroup_dims(point, self.space)
             self.register(point)
             samples.append(point)

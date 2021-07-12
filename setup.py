@@ -32,7 +32,7 @@ setup_args = dict(
         },
     install_requires=['orion>=0.1.11', 'numpy'],
     tests_require=tests_require,
-    setup_requires=['setuptools', 'pytest-runner>=2.0,<3dev'],
+    setup_requires=['setuptools', 'pytest-runner>=3.0.0'],
     extras_require=dict(test=tests_require),
     # "Zipped eggs don't play nicely with namespace packaging"
     # from https://github.com/pypa/sample-namespace-packages

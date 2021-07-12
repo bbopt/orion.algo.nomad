@@ -10,7 +10,6 @@ import pytest
 from orion.algo.space import Integer, Real, Space
 from orion.client import get_experiment
 from orion.testing.state import OrionState
-from orion.core.worker.primary_algo import PrimaryAlgo
 
 
 # pylint:disable=unused-argument
@@ -58,7 +57,7 @@ def test_optimizer_choices():
                 "--config",
                 "./benchmark/nomad.yaml",
                 "./benchmark/modif_rosenbrock.py",
-                "-x~choices(['A', 'B' , 'C', 'D', 'E', 'F'])",
+                "-x~choices(['-1', '-1.5' , '-0.5', '0', '0.5', '1', '1.5' , '2.0'])",
             ]
         )
 
