@@ -260,7 +260,7 @@ class nomad(BaseAlgorithm):
         # extra suggest with LH to force suggest of candidates
         nb_suggest_tries = 0
         while len(self.stored_candidates) < num and nb_suggest_tries < self.max_calls_to_extra_suggest:
-            self.stored_candidates.extend(PyNomad.suggest(self.initial_params))
+            self.stored_candidates.extend(x for x in PyNomad.suggest(self.initial_params) if x not in self.stored_candidates)
             nb_suggest_tries += 1
             #print("Extra Suggest (LH): ",self.stored_candidates)
 
