@@ -21,6 +21,8 @@ class Testnomad(BaseAlgoTests):
     config = {
         "seed": 1234,  # Because this is so random
         # Add other arguments for your algorithm to pass test_configuration
+        "mega_search_poll": True,
+        "lh_eval_n_factor": 4,
     }
 
 

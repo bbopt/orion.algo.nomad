@@ -16,6 +16,7 @@ import os
 
 from orion.algo.base import BaseAlgorithm
 from orion.core.utils.points import flatten_dims, regroup_dims
+import orion.core.worker.transformer 
 
 import PyNomad
 
@@ -44,7 +45,7 @@ class nomad(BaseAlgorithm):
 
     requires_dist = "linear"
     requires_shape = "flattened"
-    requires_type = None
+    requires_type = "integer"
 
     # Global flag to use LH_EVAL or MEGA_SEARCH_POLL
     use_initial_params = True
@@ -78,9 +79,17 @@ class nomad(BaseAlgorithm):
         # For sampled point ids
         self.sampled = set()
 
+
         #
         # Create Nomad parameters
         #
+
+        
+        
+
+
+        # TODO manages X0 obtained by the Algorithm configuration: dictionary {'x': 0.1, 'y': 0.4} -> must be consistent with space (dimension, input_type)
+        # Providing X0 and LH_EVAL > 0 -> error 
 
         # Dimension, bounds and bb_input_type  for flattened space
         dim = 0
@@ -93,19 +102,31 @@ class nomad(BaseAlgorithm):
             if val.type == "fidelity" :
                 raise ValueError( "PyNomad do not support fidelity type" )
 
+
             if val.prior_name not in [
                 "uniform",
                 "reciprocal",
                 "int_uniform",
                 "int_reciprocal",
+                "choices",
             ]:
                 raise ValueError(
-                    "PyNomad now only supports uniform, loguniform, uniform discrete"
+                    "PyNomad now only supports uniform, loguniform, uniform discrete, choices"
                     f" as prior: {val.prior_name}"
                 )
 
             shape = val.shape
-            
+            print(val.cast([0]))
+            #print(val.reverse([0,1,2,3,4,5])) 
+            raise ValueError("Early stop")
+            if val.prior_name == "choices":
+                # Orion provides (see requires_type) a mapping for choices for suggest and observe
+                # print(val,val.interval)
+                dim += 1
+                lb_string += str(val.interval()[0]) + ' '
+                ub_string += str(val.interval()[1]) + ' '
+                bb_input_type_string += 'I '
+                # raise ValueError("Choices are being implemented")
             
             if shape and len(shape) != 1:
                 raise ValueError("Nomad now only supports 1D shape.")
@@ -161,7 +182,7 @@ class nomad(BaseAlgorithm):
         self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
         self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
 
-        # print(self.initial_params, self.params)
+        print(self.initial_params, self.params)
 
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
@@ -179,7 +200,7 @@ class nomad(BaseAlgorithm):
         PyNomad.setSeed(seed)
         self.rng_state = PyNomad.getRNGState()
 
-        print("Seed rng: ", seed,self.rng_state)
+        # print("Seed rng: ", seed,self.rng_state)
 
 
     @property
@@ -187,7 +208,7 @@ class nomad(BaseAlgorithm):
         """Return a state dict that can be used to reset the state of the algorithm."""
 
         self.rng_state = PyNomad.getRNGState()
-        print("State dict : ",self.rng_state)
+        # print("State dict : ",self.rng_state)
         # return {'rng_state': self.rng_state, 'use_initial_params': self.use_initial_params, "_trials_info": copy.deepcopy(self._trials_info)}
 
         return {'rng_state': self.rng_state, "_trials_info": copy.deepcopy(self._trials_info)}
@@ -202,7 +223,7 @@ class nomad(BaseAlgorithm):
         self._trials_info = state_dict.get("_trials_info")
         # self.use_initial_params =state_dict.get("use_initial_params")
 
-        print("Set state : ",state_dict)
+        # print("Set state : ",state_dict)
         PyNomad.setRNGState(self.rng_state)
 
     def suggest(self, num=None):
@@ -233,29 +254,32 @@ class nomad(BaseAlgorithm):
 
 
         # print('Use initial params : ' , self.use_initial_params)
-        print('Suggest RNG State: ',self.rng_state)
+        # print('Suggest RNG State: ',self.rng_state)
 
         if self.use_initial_params:
-            print("Initial Params for suggest:",self.initial_params)
+            # print("Initial Params for suggest:",self.initial_params)
             self.stored_candidates = PyNomad.suggest(self.initial_params)
         else:
-            print("Params for suggest:", self.params)
+            # print("Params for suggest:", self.params)
             self.stored_candidates = PyNomad.suggest(self.params)
 
-        print("Suggest: ",self.stored_candidates)
+        #print("Suggest: ",self.stored_candidates)
 
         # extra suggest with LH to force suggest of candidates
         nb_suggest_tries = 0
         while len(self.stored_candidates) < num and nb_suggest_tries < self.max_calls_to_extra_suggest:
             self.stored_candidates.extend(PyNomad.suggest(self.initial_params))
             nb_suggest_tries += 1
-            print("Extra Suggest (LH): ",self.stored_candidates)
+            #print("Extra Suggest (LH): ",self.stored_candidates)
 
         # assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
         # Todo manage prior conversion : candidates -> samples
         samples = []
+        for val in self.space.values():
+            print(val.reverse([0,1]))
         for point in self.stored_candidates:
+            print(point)
             point = regroup_dims(point, self.space)
             self.register(point)
             samples.append(point)
@@ -264,6 +288,8 @@ class nomad(BaseAlgorithm):
 
         num = len(samples)
         self.no_candidates_suggested = (num == 0 )
+
+        # print("Suggest samples: ",samples)
 
         if samples:
            return samples
@@ -326,9 +352,9 @@ class nomad(BaseAlgorithm):
                     flat_point_tuple.append(x)
             candidates.append(flat_point_tuple)
 
-        print("Call PyNomad observe")
-        print(candidates_outputs)
-        print(candidates)
+        # print("Call PyNomad observe")
+        # print(candidates_outputs)
+        # print(candidates)
 
         if self.use_initial_params:
              # print("Initial params:",self.initial_params)

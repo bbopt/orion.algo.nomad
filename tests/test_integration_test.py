@@ -47,6 +47,22 @@ def test_optimizer_basic():
             ]
         )
 
+def test_optimizer_choices():
+    """Check functionality of Nomad Optimizer wrapper for single shaped dimension."""
+
+    with OrionState(experiments=[], trials=[]):
+
+        orion.core.cli.main(
+            [
+                "hunt",
+                "--config",
+                "./benchmark/nomad.yaml",
+                "./benchmark/modif_rosenbrock.py",
+                "-x~choices(['A', 'B' , 'C', 'D', 'E', 'F'])",
+            ]
+        )
+
+
 
 def test_seeding(space):
     """Verify that seeding makes sampling deterministic"""
@@ -67,5 +83,5 @@ def test_seeding(space):
 
 #mySpace=space()
 # test_seeding(mySpace)
-test_optimizer_basic()
+test_optimizer_choices()
 
