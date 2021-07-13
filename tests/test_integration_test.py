@@ -57,7 +57,7 @@ def test_optimizer_choices():
                 "--config",
                 "./benchmark/nomad.yaml",
                 "./benchmark/modif_rosenbrock.py",
-                "-x~choices(['-1', '-1.5' , '-0.5', '0', '0.5', '1', '1.5' , '2.0'])",
+                "-x~choices(['-1.2', '-0.7', '-1', '1', '-1.2', '-1.5' , '1.1', '0.3', '-0.1', '0.2', '-0.5', '0.9', '0', '0.5', '1', '1.5' , '2.0'])",
             ]
         )
 
