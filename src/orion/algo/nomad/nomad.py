@@ -157,16 +157,20 @@ class nomad(BaseAlgorithm):
         # Manages x0 obtained by the Algorithm configuration: dictionary {'x': 0.1, 'y': 0.4} -> must be consistent with space (dimension, input_type)
         # TODO handle multiple points
         self.x0_transformed = list()
+        point = list()
         if self.x0 is not None:
             assert type(self.x0) is dict, "PyNomad: x0 must be provided as a dictionary"
-            point = list(self.x0.values())
+            for val in self.space.values():
+                point.append(self.x0[val.name[1:]])
+
             assert len(point) == dim, "PyNomad: x0 dimension must be consistent with variable definition"
 
-            # Transorm the x0 provided in user space into the optimization space.
+            # Transform the x0 provided in user space into the optimization space.
             # Suggest provide points in optimization space
             for i in range(dim):
                 self.x0_transformed.append(self.space.transform(point)[i].tolist())
-                assert self.x0_transformed[i] <= ub[i] and self.x0_transformed[i] >= lb[i], "x0 must be within bounds"
+
+        assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
 
         if not self.x0 and initial_lh_eval_n_factor == 0:
             raise ValueError("PyNomad needs an initial phase: provide x0 or initial_lh_eval_n_factor>0 ")
@@ -286,7 +290,7 @@ class nomad(BaseAlgorithm):
 
         # extra suggest with LH to force suggest of candidates
         nb_suggest_tries = 0
-        if self.initia_lh_eval_n_factor > 0:
+        if self.initial_lh_eval_n_factor > 0:
             while len(self.stored_candidates) < num and nb_suggest_tries < self.max_calls_to_extra_suggest:
                 self.stored_candidates.extend(x for x in PyNomad.suggest(self.initial_params) if x not in self.stored_candidates) # make sure to not add duplicate points
                 nb_suggest_tries += 1
