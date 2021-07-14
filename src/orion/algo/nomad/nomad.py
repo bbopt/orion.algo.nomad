@@ -16,7 +16,6 @@ import os
 
 from orion.algo.base import BaseAlgorithm
 from orion.core.utils.points import flatten_dims, regroup_dims
-import orion.core.worker.transformer 
 
 import PyNomad
 
@@ -36,16 +35,18 @@ class nomad(BaseAlgorithm):
     mega_search_poll: bool
         Use Mads mega search poll strategy to generate Points
         Default: True
-    lh_eval_n_factor: int
+    initial_lh_eval_n_factor: int
         Multiply the factor by n and obtain the number of latin hypercube
         samples used in the initial phase
+    x0: dict
+        A single initial point
 
 
     """
 
     requires_dist = "linear"
     requires_shape = "flattened"
-    requires_type = "integer"
+    requires_type = "numerical"
 
     # Global flag to use LH_EVAL or MEGA_SEARCH_POLL
     use_initial_params = True
@@ -53,10 +54,10 @@ class nomad(BaseAlgorithm):
     # Global flag to stop when no points are suggestes
     no_candidates_suggested = False
 
-    def __init__(self, space, seed=None, mega_search_poll=True, lh_eval_n_factor=3, x0=None):
+    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None):
         super(nomad, self).__init__(space,seed=seed,
                                           mega_search_poll=mega_search_poll,
-                                          lh_eval_n_factor=lh_eval_n_factor,
+                                          initial_lh_eval_n_factor=initial_lh_eval_n_factor,
                                           x0=x0)
 
 
@@ -75,7 +76,7 @@ class nomad(BaseAlgorithm):
     def _initialize(self, space):
 
         assert self.mega_search_poll, "For the moment PyNomad only works with mega_search_poll activated"
-        assert self.lh_eval_n_factor >= 0, "PyNomad only works with lh_eval_n_factor>=0 or =0 if x0 provided"
+        assert self.initial_lh_eval_n_factor >= 0, "PyNomad only works with initial_lh_eval_n_factor>=0"
 
         # For sampled point ids
         self.sampled = set()
@@ -84,26 +85,12 @@ class nomad(BaseAlgorithm):
         #
         # Create Nomad parameters
         #
-        
 
-        # Manages x0 obtained by the Algorithm configuration: dictionary {'x': 0.1, 'y': 0.4} -> must be consistent with space (dimension, input_type)
-        # Providing x0 and LH_EVAL > 0 -> error
-        # TODO handle multiple points
-        self.x0_transformed = list()
-        if self.x0 is not None:
-            assert type(self.x0) is dict, "x0 must be provided as a dictionary"
-            point = list(self.x0.values())
-            # if point not in self.space:
-            #     raise ValueError(
-            #      """Point x0 is not contained in space:
-            #      Point: {}
-            #      Space: {}""".format(point, self.space)
-            #      )
-
-            self.x0_transformed.append(self.space.transform(point)[0].tolist())
-
+        # TODO try to convert precision give to Real parameters into granularity.
+        # This must consider upper and lower bounds. Not so easy!
 
         # Dimension, bounds and bb_input_type  for flattened space
+        # X0 is not set as a Nomad parameters
         dim = 0
         dimension_string = 'DIMENSION '
         lb_string = 'LOWER_BOUND ( '
@@ -114,7 +101,7 @@ class nomad(BaseAlgorithm):
         ub = list()
         for val in self.space.values():
             if val.type == "fidelity" :
-                raise ValueError( "PyNomad do not support fidelity type" )
+                raise ValueError( "PyNomad does not support fidelity type" )
 
 
             if val.prior_name not in [
@@ -130,12 +117,9 @@ class nomad(BaseAlgorithm):
                 )
 
             shape = val.shape
-            # print(val.reverse([0]))
-            #print(val.reverse([0,1,2,3,4,5])) 
-            # raise ValueError("Early stop")
 
             if shape and len(shape) != 1:
-                raise ValueError("Nomad now only supports 1D shape.")
+                raise ValueError("PyNomad now only supports 1D shape.")
             elif len(shape) == 0:
                 dim += 1
                 lb.append(val.interval()[0])
@@ -148,7 +132,7 @@ class nomad(BaseAlgorithm):
                 elif val.type == 'integer' :
                     bb_input_type_string += 'I '
                 else :
-                    raise ValueError("PyNomad now only accept real and integer type ")
+                    raise ValueError("PyNomad now only accepts real and integer type ")
             else:
                 dim += shape[0]
                 for s in range(shape[0]):
@@ -162,17 +146,30 @@ class nomad(BaseAlgorithm):
                     elif val.type == 'integer' :
                         bb_input_type_string += 'I '
                     else :
-                        raise ValueError("PyNomad now only accept real and integer type ")
+                        raise ValueError("PyNomad now only accepts real and integer type ")
 
         dimension_string += str(dim)
         lb_string += ' )'
         ub_string += ' )'
         bb_input_type_string += ' )'
 
-        if self.x0_transformed:
-            assert len(self.x0_transformed) == dim, "x0 dimension must be consistent with variable definition"
-            for i in range(len(self.x0_transformed)):
+
+        # Manages x0 obtained by the Algorithm configuration: dictionary {'x': 0.1, 'y': 0.4} -> must be consistent with space (dimension, input_type)
+        # TODO handle multiple points
+        self.x0_transformed = list()
+        if self.x0 is not None:
+            assert type(self.x0) is dict, "PyNomad: x0 must be provided as a dictionary"
+            point = list(self.x0.values())
+            assert len(point) == dim, "PyNomad: x0 dimension must be consistent with variable definition"
+
+            # Transorm the x0 provided in user space into the optimization space.
+            # Suggest provide points in optimization space
+            for i in range(dim):
+                self.x0_transformed.append(self.space.transform(point)[i].tolist())
                 assert self.x0_transformed[i] <= ub[i] and self.x0_transformed[i] >= lb[i], "x0 must be within bounds"
+
+        if not self.x0 and initial_lh_eval_n_factor == 0:
+            raise ValueError("PyNomad needs an initial phase: provide x0 or initial_lh_eval_n_factor>0 ")
 
         # Todo constraints
         bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
@@ -185,7 +182,7 @@ class nomad(BaseAlgorithm):
 
         suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
 
-        first_suggest_algo = 'LH_EVAL ' + str(dim*self.lh_eval_n_factor)
+        first_suggest_algo = 'LH_EVAL ' + str(dim*self.initial_lh_eval_n_factor)
 
         # IMPORTANT
         # Seed is managed explicitly with PyNomad.setSeed. Do not pass SEED as a parameter
@@ -193,7 +190,7 @@ class nomad(BaseAlgorithm):
         # if all_variables_are_granular:
         #    self.max_calls_to_extra_suggest = 100 * pow(3,len(self.space.values())) # This value is MAX_EVAL in Nomad when all variables are granular
         #else :
-        self.max_calls_to_extra_suggest = 1 # This is arbitrary
+        self.max_calls_to_extra_suggest = 1 # This is arbitrary  # TODO make this a PyNomad parameter
 
         # If x0 is defined the first suggest is to provide x0 (initial params is not used)
         # + additional LH samples if required (initial params is used)
@@ -289,7 +286,7 @@ class nomad(BaseAlgorithm):
 
         # extra suggest with LH to force suggest of candidates
         nb_suggest_tries = 0
-        if self.lh_eval_n_factor > 0:
+        if self.initia_lh_eval_n_factor > 0:
             while len(self.stored_candidates) < num and nb_suggest_tries < self.max_calls_to_extra_suggest:
                 self.stored_candidates.extend(x for x in PyNomad.suggest(self.initial_params) if x not in self.stored_candidates) # make sure to not add duplicate points
                 nb_suggest_tries += 1
@@ -306,7 +303,7 @@ class nomad(BaseAlgorithm):
             for i in range(len(point)):
                 if self.space.values()[i].type == 'integer':
                     intVal=int(point[i])
-                    assert intVal==point[i], 'Suggest: point must be integer'
+                    assert intVal==point[i], 'PyNomad Suggest: point must be integer'
                     point[i]=intVal
 
             point = regroup_dims(point, self.space)
@@ -353,7 +350,7 @@ class nomad(BaseAlgorithm):
            or equal to zero by the problem's definition.
 
         """
-        assert len(points) == len(results), "The length of results and points are not the same"
+        assert len(points) == len(results), "PyNomad observe: The length of results and points are not the same"
 
         #print('observe, use_first_params=',self.use_initial_params)
         candidates_outputs = list()
@@ -375,7 +372,7 @@ class nomad(BaseAlgorithm):
             for x in flat_point:
                  #print(type(x))
                  if type(x)==numpy.ndarray:
-                    assert x.size==1, "The length of the ndarray should be one"
+                    assert x.size==1, "PyNomad observe: The length of the ndarray should be one"
                     flat_point_tuple.append(numpy.float64(x))
                  else:
                     flat_point_tuple.append(x)
@@ -396,7 +393,7 @@ class nomad(BaseAlgorithm):
         super(nomad, self).observe(points, results) 
 
 
-    	# Decode bytes into string
+        # Decode bytes into string
         for i in range(len(updatedParams)):
             updatedParams[i] = updatedParams[i].decode('utf-8')
         for i in range(len(self.params)):
@@ -405,7 +402,7 @@ class nomad(BaseAlgorithm):
 
         # print("Updated parameters by observe:\n",updatedParams)
 
-    	# Replace updated params in params OR add if not present
+        # Replace updated params in params OR add if not present
         for i in range(len(updatedParams)):
             split1 = updatedParams[i].split()
             found = False
