@@ -170,9 +170,9 @@ class nomad(BaseAlgorithm):
             for i in range(dim):
                 self.x0_transformed.append(self.space.transform(point)[i].tolist())
 
-        assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
+            assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
 
-        if not self.x0 and initial_lh_eval_n_factor == 0:
+        if not self.x0 and self.initial_lh_eval_n_factor == 0:
             raise ValueError("PyNomad needs an initial phase: provide x0 or initial_lh_eval_n_factor>0 ")
 
         # Todo constraints
