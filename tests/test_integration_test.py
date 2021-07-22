@@ -10,6 +10,21 @@ import pytest
 from orion.algo.space import Integer, Real, Space
 from orion.client import get_experiment
 from orion.testing.state import OrionState
+from orion.algo.nomad import nomad
+from orion.testing.algo import BaseAlgoTests
+
+import itertools
+
+class Testnomad(BaseAlgoTests):
+
+    algo_name = "nomad"
+    config = {
+        "seed": 1234,  # Because this is so random
+        # Add other arguments for your algorithm to pass test_configuration
+        "mega_search_poll": True,
+        "initial_lh_eval_n_factor": 4,
+        "x0": None,
+    }
 
 
 # pylint:disable=unused-argument
@@ -96,7 +111,39 @@ def test_seeding(space):
     #optimizer.seed_rng(1)
     #numpy.testing.assert_equal(a, optimizer.suggest(1)[0])
 
-#mySpace=space()
-# test_seeding(mySpace)
-test_optimizer_choices_and_uniform()
+def test_is_done_cardinality(self):
+        """Test that algorithm will stop when cardinality is reached"""
+        space = self.update_space(
+            {
+                "x": "uniform(0, 4, discrete=True)",
+                "y": "choices(['a', 'b', 'c'])",
+                "z": "uniform(1, 6, discrete=True)",
+            }
+        )
+        space = self.create_space(space)
+        assert space.cardinality == 5 * 3 * 6
 
+        algo = self.create_algo(space=space)
+        for i, (x, y, z) in enumerate(itertools.product(range(5), "abc", range(1, 7))):
+            assert not algo.is_done
+            n = algo.n_suggested
+            algo.observe([[x, y, z]], [dict(objective=i)])
+            assert algo.n_suggested == n + 1
+
+        assert i + 1 == space.cardinality
+
+        assert algo.is_done
+
+
+def test_is_done_max_trials(self):
+    """Test that algorithm will stop when max trials is reached"""
+
+    algo = self.create_algo()
+    self.force_observe(self.max_trials, algo)
+
+
+#mySpace=Space()
+# test_seeding(mySpace)
+#test_optimizer_choices_and_uniform()
+test=Testnomad()
+test_is_done_max_trials(test)

@@ -1,0 +1,19 @@
+experiment:
+    name: orion_pynomad_rosenbrock_2var
+    max_trials: 100 
+    algorithms:
+      nomad:
+        seed: 1
+        initial_lh_eval_n_factor: 3 
+        x0: {'x': 0.5, 'y': 0.5}
+        mega_search_poll: True
+
+    strategy:
+        MaxParallelStrategy:
+            default_result: 10000
+
+storage:
+  database:
+     type: 'ephemeraldb'
+#    type: 'pickleddb'
+#    host: './database.pkl'
