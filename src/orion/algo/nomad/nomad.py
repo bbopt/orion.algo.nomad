@@ -178,7 +178,7 @@ class nomad(BaseAlgorithm):
         # Todo constraints
         bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
 
-        self.cache_file_name = 'cache.txt'
+        self.cache_file_name = 'cache'+str(os.getpid())+'.txt'
         if os.path.exists(self.cache_file_name):
             os.remove(self.cache_file_name)
             self.use_initial_params = True
@@ -311,8 +311,9 @@ class nomad(BaseAlgorithm):
                     point[i]=intVal
 
             point = regroup_dims(point, self.space)
-            self.register(point)
-            samples.append(point)
+            if point not in samples:
+                self.register(point)
+                samples.append(point)
             if len(samples) >= num:   # return the number requested.
                 break;
 
