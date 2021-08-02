@@ -23,7 +23,6 @@ class Testnomad(BaseAlgoTests):
         # Add other arguments for your algorithm to pass test_configuration
         "mega_search_poll": True,
         "initial_lh_eval_n_factor": 4,
-        "x0": None,
     }
 
 

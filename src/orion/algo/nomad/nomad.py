@@ -48,11 +48,14 @@ class nomad(BaseAlgorithm):
     requires_shape = "flattened"
     requires_type = "numerical"
 
-    # Global flag to use LH_EVAL or MEGA_SEARCH_POLL
+    # Global flag to set the use of LH_EVAL (if no X0 provided) for the first suggest
+    # or use MEGA_SEARCH_POLL for remaining calls to suggest
     use_initial_params = True
 
-    # Global flag to stop when no points are suggestes
+    # Global flag to stop when no points are suggested
     no_candidates_suggested = False
+
+    pidstr = str(os.getpid())
 
     def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None):
         super(nomad, self).__init__(space,seed=seed,
@@ -80,7 +83,6 @@ class nomad(BaseAlgorithm):
 
         # For sampled point ids
         self.sampled = set()
-
 
         #
         # Create Nomad parameters
@@ -178,10 +180,10 @@ class nomad(BaseAlgorithm):
         # Todo constraints
         bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
 
-        self.cache_file_name = 'cache'+str(os.getpid())+'.txt'
+        # use pid to have a unique cache name for each orion PyNomad running in parallel
+        self.cache_file_name = 'cache.'+self.pidstr+'.txt'
         if os.path.exists(self.cache_file_name):
             os.remove(self.cache_file_name)
-            self.use_initial_params = True
         cache_file_string = 'CACHE_FILE '+self.cache_file_name
 
         suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
@@ -191,9 +193,6 @@ class nomad(BaseAlgorithm):
         # IMPORTANT
         # Seed is managed explicitly with PyNomad.setSeed. Do not pass SEED as a parameter
 
-        # if all_variables_are_granular:
-        #    self.max_calls_to_extra_suggest = 100 * pow(3,len(self.space.values())) # This value is MAX_EVAL in Nomad when all variables are granular
-        #else :
         self.max_calls_to_extra_suggest = 1 # This is arbitrary  # TODO make this a PyNomad parameter
 
         # If x0 is defined the first suggest is to provide x0 (initial params is not used)
@@ -201,7 +200,7 @@ class nomad(BaseAlgorithm):
         self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
         self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
 
-        # print(self.initial_params, self.params)
+        # print("Initialize ( ", self.pidstr," ):", self.initial_params, self.params)
 
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
@@ -219,7 +218,7 @@ class nomad(BaseAlgorithm):
         PyNomad.setSeed(seed)
         self.rng_state = PyNomad.getRNGState()
 
-        # print("Seed rng: ", seed,self.rng_state)
+        # print("Seed rng: ", self.pidstr, seed, self.rng_state)
 
 
     @property
@@ -227,8 +226,7 @@ class nomad(BaseAlgorithm):
         """Return a state dict that can be used to reset the state of the algorithm."""
 
         self.rng_state = PyNomad.getRNGState()
-        # print("State dict : ",self.rng_state)
-        # return {'rng_state': self.rng_state, 'use_initial_params': self.use_initial_params, "_trials_info": copy.deepcopy(self._trials_info)}
+        # print("State dict ( ", self.pidstr," ):", self.rng_state)
 
         return {'rng_state': self.rng_state, "_trials_info": copy.deepcopy(self._trials_info)}
 
@@ -240,9 +238,8 @@ class nomad(BaseAlgorithm):
 
         self.rng_state = state_dict["rng_state"]
         self._trials_info = state_dict.get("_trials_info")
-        # self.use_initial_params =state_dict.get("use_initial_params")
 
-        # print("Set state : ",state_dict)
+        # print("Set state ( ", self.pidstr," ):", state_dict)
         PyNomad.setRNGState(self.rng_state)
 
     def suggest(self, num=None):
@@ -320,7 +317,7 @@ class nomad(BaseAlgorithm):
         num = len(samples)
         self.no_candidates_suggested = (num == 0 )
 
-        # print("Suggest samples: ",samples)
+        # print("Suggest samples ( ", self.pidstr," ):", samples)
 
         if samples:
            return samples
@@ -384,8 +381,8 @@ class nomad(BaseAlgorithm):
             candidates.append(flat_point_tuple)
 
         # print("Call PyNomad observe")
-        # print(candidates_outputs)
-        # print(candidates)
+        # print("Observe ( ", self.pidstr," ) outputs:", candidates_outputs)
+        # print("Observe ( ", self.pidstr," ) candidates:", candidates)
 
         if self.use_initial_params:
              # print("Initial params:",self.initial_params)
@@ -405,7 +402,7 @@ class nomad(BaseAlgorithm):
             if type(self.params[i]) is bytes:
                 self.params[i] = self.params[i].decode('utf-8')
 
-        # print("Updated parameters by observe:\n",updatedParams)
+        # print("Updated parameters by observe( ", self.pidstr," )\n",updatedParams)
 
         # Replace updated params in params OR add if not present
         for i in range(len(updatedParams)):

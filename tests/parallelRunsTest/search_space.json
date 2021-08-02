@@ -1,0 +1,4 @@
+{
+    "x": "orion~uniform(-3,3)",
+    "y": "orion~uniform(-3,3)"
+}
