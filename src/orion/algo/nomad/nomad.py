@@ -387,10 +387,10 @@ class nomad(BaseAlgorithm):
 
         if self.use_initial_params:
              # print("Initial params:",self.initial_params)
-             updatedParams = PyNomad.observe(self.initial_params,candidates,candidates_outputs,self.cache_file_name)
+             updatedParams = PyNomad.observe(self.initial_params, candidates, candidates_outputs, self.cache_file_name)
              self.use_initial_params = False  # after initial observe we use only params
         else:
-             updatedParams = PyNomad.observe(self.params,candidates,candidates_outputs,self.cache_file_name)
+             updatedParams = PyNomad.observe(self.params, candidates, candidates_outputs, self.cache_file_name)
 
 
         super(nomad, self).observe(points, results) 
