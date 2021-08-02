@@ -308,7 +308,6 @@ class nomad(BaseAlgorithm):
                     point[i]=intVal
 
             point = regroup_dims(point, self.space)
-
             if point not in samples:
                 self.register(point)
                 samples.append(point)
