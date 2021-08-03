@@ -57,12 +57,14 @@ class nomad(BaseAlgorithm):
 
     pidstr = str(os.getpid())
 
-    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None, bb_output_type='OBJ'):
-        super(nomad, self).__init__(space,seed=seed,
-                                          mega_search_poll=mega_search_poll,
-                                          initial_lh_eval_n_factor=initial_lh_eval_n_factor,
-                                          x0=x0,
-                                          bb_output_type=bb_output_type)
+    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None,
+                 bb_output_type='OBJ'):
+        super(nomad, self).__init__(space,
+                                    seed=seed,
+                                    mega_search_poll=mega_search_poll,
+                                    initial_lh_eval_n_factor=initial_lh_eval_n_factor,
+                                    x0=x0,
+                                    bb_output_type=bb_output_type)
 
 
     @property
@@ -191,7 +193,7 @@ class nomad(BaseAlgorithm):
         for idx, single_output_type in enumerate(list_of_bb_output_type):
             if single_output_type == 'OBJ':
                 self.index_objective_in_bb_output.append(idx)
-            elif single_output_type == 'PB' or single_output_type == 'EB':
+            elif single_output_type == 'PB' or single_output_type == 'EB' or single_output_type == 'CSTR':
                 self.index_constraint_in_bb_output.append(idx)
             else:
                 raise ValueError("PyNomad: a valid bb_output_type containing OBJ, PB or EB keywords is required")
