@@ -24,6 +24,7 @@ class Testnomad(BaseAlgoTests):
         "mega_search_poll": True,
         "initial_lh_eval_n_factor": 4,
         "x0": None,
+        "bb_outputs": {1: 'OBJ', 2: 'PB'}
     }
 
 
@@ -58,6 +59,22 @@ def test_optimizer_basic():
                 "./benchmark/nomad.yaml",
                 "./benchmark/modif_rosenbrock.py",
                 "-x~uniform(-5, 5, precision=None)",
+            ]
+        )
+
+def test_optimizer_constraint():
+    """Check functionality of Nomad Optimizer wrapper for pb with constraints."""
+
+    with OrionState(experiments=[], trials=[]):
+
+        orion.core.cli.main(
+            [
+                "hunt",
+                "--config",
+                "./constraintRunTest/nomad.yml",
+                "./constraintRunTest/bb.py",
+                "-x~uniform(-5, 5, precision=None)",
+                "-y~uniform(-5, 5, precision=None)",
             ]
         )
 
@@ -144,6 +161,7 @@ def test_is_done_max_trials(self):
 
 #mySpace=Space()
 # test_seeding(mySpace)
-#test_optimizer_choices_and_uniform()
-test=Testnomad()
-test_is_done_max_trials(test)
+test_optimizer_choices_and_uniform()
+#test=Testnomad()
+#test_is_done_max_trials(test)
+#test_optimizer_constraint()

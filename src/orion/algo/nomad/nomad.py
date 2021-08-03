@@ -57,11 +57,12 @@ class nomad(BaseAlgorithm):
 
     pidstr = str(os.getpid())
 
-    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None):
+    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None, bb_output_type='OBJ'):
         super(nomad, self).__init__(space,seed=seed,
                                           mega_search_poll=mega_search_poll,
                                           initial_lh_eval_n_factor=initial_lh_eval_n_factor,
-                                          x0=x0)
+                                          x0=x0,
+                                          bb_output_type=bb_output_type)
 
 
     @property
@@ -170,15 +171,32 @@ class nomad(BaseAlgorithm):
             # Transform the x0 provided in user space into the optimization space.
             # Suggest provide points in optimization space
             for i in range(dim):
-                self.x0_transformed.append(self.space.transform(point)[i].tolist())
+                transformed_val_i = self.space.transform(point)[i]
+                if type(transformed_val_i) == int or type(transformed_val_i) == float:
+                    self.x0_transformed.append(transformed_val_i)
+                else:
+                    self.x0_transformed.append(transformed_val_i.tolist())
 
             assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
 
         if not self.x0 and self.initial_lh_eval_n_factor == 0:
             raise ValueError("PyNomad needs an initial phase: provide x0 or initial_lh_eval_n_factor>0 ")
 
-        # Todo constraints
-        bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
+        # Bb output types for nomad
+        bbo_type_string = 'BB_OUTPUT_TYPE '+self.bb_output_type
+        # Need to keep the indices for observe
+        list_of_bb_output_type = self.bb_output_type.split()
+        self.index_objective_in_bb_output = list()
+        self.index_constraint_in_bb_output = list()
+        for idx, single_output_type in enumerate(list_of_bb_output_type):
+            if single_output_type == 'OBJ':
+                self.index_objective_in_bb_output.append(idx)
+            elif single_output_type == 'PB' or single_output_type == 'EB':
+                self.index_constraint_in_bb_output.append(idx)
+            else:
+                raise ValueError("PyNomad: a valid bb_output_type containing OBJ, PB or EB keywords is required")
+        assert len(self.index_objective_in_bb_output) > 0, "PyNomad: at least an objective must be provided in bb_output_type"
+
 
         # use pid to have a unique cache name for each orion PyNomad running in parallel
         self.cache_file_name = 'cache.'+self.pidstr+'.txt'
@@ -357,7 +375,7 @@ class nomad(BaseAlgorithm):
         #print('observe, use_first_params=',self.use_initial_params)
         candidates_outputs = list()
         candidates = list()
-        for point, result in zip(points, results):
+        for point, single_result in zip(points, results):
 
             #if not self.has_suggested(point):
             #    logger.info(
@@ -366,9 +384,19 @@ class nomad(BaseAlgorithm):
             #    )
             #    continue
             tmp_outputs = list()
-            tmp_outputs.append(result['objective']) # TODO constraints
 
-            candidates_outputs.append(tmp_outputs) # TODO constraints
+            # Append the results in the same order as in bb_output_type
+            list_objective_result = [single_result['objective']] if type(single_result['objective']) is not list \
+                                                                 else single_result['objective']
+            for idx, index_item in enumerate(self.index_objective_in_bb_output):
+                tmp_outputs.insert(index_item, list_objective_result[idx])
+
+            list_constraint_result = [single_result['constraint']] if type(single_result['constraint']) is not list \
+                                                                 else single_result['constraint']
+            for idx, index_item in enumerate(self.index_constraint_in_bb_output):
+                tmp_outputs.insert(index_item, list_constraint_result[idx])
+
+            candidates_outputs.append(tmp_outputs)
             flat_point = flatten_dims(point,self.space)
             flat_point_tuple = list()
             for x in flat_point:
@@ -413,7 +441,7 @@ class nomad(BaseAlgorithm):
                 if ( split2[0].upper() == split1[0].upper() ):
                     self.params[j] = updatedParams[i]
                     found = True
-                    break;
+                    break
             if not found:
                 self.params.append(updatedParams[i])
 
