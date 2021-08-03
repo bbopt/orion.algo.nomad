@@ -161,7 +161,7 @@ def test_is_done_max_trials(self):
 
 #mySpace=Space()
 # test_seeding(mySpace)
-test_optimizer_choices_and_uniform()
+# test_optimizer_choices_and_uniform()
 #test=Testnomad()
 #test_is_done_max_trials(test)
-#test_optimizer_constraint()
+test_optimizer_constraint()

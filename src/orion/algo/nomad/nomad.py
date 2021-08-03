@@ -387,14 +387,15 @@ class nomad(BaseAlgorithm):
 
             # Append the results in the same order as in bb_output_type
             list_objective_result = [single_result['objective']] if type(single_result['objective']) is not list \
-                                                                 else single_result['objective']
+                                     else single_result['objective']
             for idx, index_item in enumerate(self.index_objective_in_bb_output):
                 tmp_outputs.insert(index_item, list_objective_result[idx])
 
-            list_constraint_result = [single_result['constraint']] if type(single_result['constraint']) is not list \
-                                                                 else single_result['constraint']
-            for idx, index_item in enumerate(self.index_constraint_in_bb_output):
-                tmp_outputs.insert(index_item, list_constraint_result[idx])
+            if 'constraint' in single_result:
+                list_constraint_result = [single_result['constraint']] if type(single_result['constraint']) is not list\
+                                          else single_result['constraint']
+                for idx, index_item in enumerate(self.index_constraint_in_bb_output):
+                    tmp_outputs.insert(index_item, list_constraint_result[idx])
 
             candidates_outputs.append(tmp_outputs)
             flat_point = flatten_dims(point,self.space)
