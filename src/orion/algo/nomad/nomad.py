@@ -199,7 +199,6 @@ class nomad(BaseAlgorithm):
                 raise ValueError("PyNomad: a valid bb_output_type containing OBJ, CSTR, PB or EB keywords is required")
         assert len(self.index_objective_in_bb_output) > 0, "PyNomad: at least an objective must be provided in bb_output_type"
 
-
         # use pid to have a unique cache name for each orion PyNomad running in parallel
         self.cache_file_name = 'cache.'+self.pidstr+'.txt'
         if os.path.exists(self.cache_file_name):
@@ -402,8 +401,7 @@ class nomad(BaseAlgorithm):
                 if len(list_constraint_result) != len(self.index_constraint_in_bb_output):
                     flag_no_constraint = True
                 for idx, index_item in enumerate(self.index_constraint_in_bb_output):
-                         #print(idx,index_item)
-                         tmp_outputs.insert(index_item, float('inf') if flag_no_constraint else list_constraint_result[idx])
+                    tmp_outputs.insert(index_item, float('inf') if flag_no_constraint else list_constraint_result[idx])
 
             candidates_outputs.append(tmp_outputs)
             flat_point = flatten_dims(point,self.space)
