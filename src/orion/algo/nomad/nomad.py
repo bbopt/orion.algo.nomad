@@ -57,12 +57,14 @@ class nomad(BaseAlgorithm):
 
     pidstr = str(os.getpid())
 
-    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None, bb_output_type='OBJ'):
-        super(nomad, self).__init__(space,seed=seed,
-                                          mega_search_poll=mega_search_poll,
-                                          initial_lh_eval_n_factor=initial_lh_eval_n_factor,
-                                          x0=x0,
-                                          bb_output_type=bb_output_type)
+    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None,
+                 bb_output_type='OBJ'):
+        super(nomad, self).__init__(space,
+                                    seed=seed,
+                                    mega_search_poll=mega_search_poll,
+                                    initial_lh_eval_n_factor=initial_lh_eval_n_factor,
+                                    x0=x0,
+                                    bb_output_type=bb_output_type)
 
 
     @property
