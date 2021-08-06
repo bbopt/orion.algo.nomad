@@ -196,7 +196,7 @@ class nomad(BaseAlgorithm):
             elif single_output_type == 'PB' or single_output_type == 'EB' or single_output_type == 'CSTR':
                 self.index_constraint_in_bb_output.append(idx)
             else:
-                raise ValueError("PyNomad: a valid bb_output_type containing OBJ, PB or EB keywords is required")
+                raise ValueError("PyNomad: a valid bb_output_type containing OBJ, CSTR, PB or EB keywords is required")
         assert len(self.index_objective_in_bb_output) > 0, "PyNomad: at least an objective must be provided in bb_output_type"
 
 

@@ -10,7 +10,7 @@ from orion.client import report_results
 
 def bb(x, y):
 
-    return -x-y, 100*(y-x*x)**2+(1-x)**2, x+y-10
+    return -x-y, 100*(y-x*x)**2+(1-x)**2, x+y-5
 
 
 if __name__ == '__main__':
@@ -27,7 +27,10 @@ if __name__ == '__main__':
         bb_outputs = list()
         bb_outputs.append({'name': 'bbo1', 'type': 'constraint', 'value': c1})
         bb_outputs.append({'name': 'bbo2', 'type': 'objective', 'value': f})
-        bb_outputs.append({'name': 'bbo3', 'type': 'constraint', 'value': c2})
+        if c2 < 0:
+            bb_outputs.append({'name': 'bbo3', 'type': 'constraint', 'value': c2})
+        else:
+            bb_outputs.append({'name': 'bbo3', 'type': 'constraint', 'value': float('inf')})
         report_results(bb_outputs)     # Return objective and constraints to Orion
         print(inputs.x, inputs.y, c1, f, c2)
             
