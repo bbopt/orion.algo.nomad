@@ -191,10 +191,10 @@ class nomad(BaseAlgorithm):
         for idx, single_output_type in enumerate(list_of_bb_output_type):
             if single_output_type == 'OBJ':
                 self.index_objective_in_bb_output.append(idx)
-            elif single_output_type == 'PB' or single_output_type == 'EB':
+            elif single_output_type == 'PB' or single_output_type == 'EB' or single_output_type == 'CSTR':
                 self.index_constraint_in_bb_output.append(idx)
             else:
-                raise ValueError("PyNomad: a valid bb_output_type containing OBJ, PB or EB keywords is required")
+                raise ValueError("PyNomad: a valid bb_output_type containing OBJ, CSTR, PB or EB keywords is required")
         assert len(self.index_objective_in_bb_output) > 0, "PyNomad: at least an objective must be provided in bb_output_type"
 
 
@@ -391,11 +391,17 @@ class nomad(BaseAlgorithm):
             for idx, index_item in enumerate(self.index_objective_in_bb_output):
                 tmp_outputs.insert(index_item, list_objective_result[idx])
 
+            #print(point, single_result)
             if 'constraint' in single_result:
                 list_constraint_result = [single_result['constraint']] if type(single_result['constraint']) is not list\
                                           else single_result['constraint']
+                # Manage empty constraint value -> inf
+                flag_no_constraint = False
+                if len(list_constraint_result) != len(self.index_constraint_in_bb_output):
+                    flag_no_constraint = True
                 for idx, index_item in enumerate(self.index_constraint_in_bb_output):
-                    tmp_outputs.insert(index_item, list_constraint_result[idx])
+                         #print(idx,index_item)
+                         tmp_outputs.insert(index_item, float('inf') if flag_no_constraint else list_constraint_result[idx])
 
             candidates_outputs.append(tmp_outputs)
             flat_point = flatten_dims(point,self.space)
