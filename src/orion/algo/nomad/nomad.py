@@ -35,27 +35,37 @@ class nomad(BaseAlgorithm):
     mega_search_poll: bool
         Use Mads mega search poll strategy to generate Points
         Default: True
-    lh_eval_n_factor: into
+    initial_lh_eval_n_factor: int
         Multiply the factor by n and obtain the number of latin hypercube
         samples used in the initial phase
+    x0: dict
+        A single initial point
 
 
     """
 
     requires_dist = "linear"
     requires_shape = "flattened"
-    requires_type = None
+    requires_type = "numerical"
 
-    # Global flag to use LH_EVAL or MEGA_SEARCH_POLL
+    # Global flag to set the use of LH_EVAL (if no X0 provided) for the first suggest
+    # or use MEGA_SEARCH_POLL for remaining calls to suggest
     use_initial_params = True
 
-    # Global flag to stop when no points are suggestes
+    # Global flag to stop when no points are suggested
     no_candidates_suggested = False
 
-    def __init__(self, space, seed=None, mega_search_poll=True, lh_eval_n_factor=3):
-        super(nomad, self).__init__(space,seed=seed,
-                                          mega_search_poll=mega_search_poll,
-                                          lh_eval_n_factor=lh_eval_n_factor)
+    pidstr = str(os.getpid())
+
+    def __init__(self, space, seed=None, mega_search_poll=True, initial_lh_eval_n_factor=3, x0=None,
+                 bb_output_type='OBJ'):
+        super(nomad, self).__init__(space,
+                                    seed=seed,
+                                    mega_search_poll=mega_search_poll,
+                                    initial_lh_eval_n_factor=initial_lh_eval_n_factor,
+                                    x0=x0,
+                                    bb_output_type=bb_output_type)
+
 
     @property
     def space(self):
@@ -72,45 +82,53 @@ class nomad(BaseAlgorithm):
     def _initialize(self, space):
 
         assert self.mega_search_poll, "For the moment PyNomad only works with mega_search_poll activated"
-        assert self.lh_eval_n_factor > 0, "For the moment PyNomad only works with lh_eval_n_factor>0"
+        assert self.initial_lh_eval_n_factor >= 0, "PyNomad only works with initial_lh_eval_n_factor>=0"
 
         # For sampled point ids
         self.sampled = set()
-
-        # print(space)
 
         #
         # Create Nomad parameters
         #
 
+        # TODO try to convert precision give to Real parameters into granularity.
+        # This must consider upper and lower bounds. Not so easy!
+
         # Dimension, bounds and bb_input_type  for flattened space
+        # X0 is not set as a Nomad parameters
         dim = 0
         dimension_string = 'DIMENSION '
         lb_string = 'LOWER_BOUND ( '
         ub_string = 'UPPER_BOUND ( '
         all_variables_are_granular = True
         bb_input_type_string = 'BB_INPUT_TYPE ( '
+        lb = list()
+        ub = list()
         for val in self.space.values():
             if val.type == "fidelity" :
-                raise ValueError( "PyNomad do not support fidelity type" )
+                raise ValueError( "PyNomad does not support fidelity type" )
+
 
             if val.prior_name not in [
                 "uniform",
                 "reciprocal",
                 "int_uniform",
                 "int_reciprocal",
+                "choices",
             ]:
                 raise ValueError(
-                    "PyNomad now only supports uniform, loguniform, uniform discrete"
+                    "PyNomad now only supports uniform, loguniform, uniform discrete, choices"
                     f" as prior: {val.prior_name}"
                 )
 
             shape = val.shape
 
             if shape and len(shape) != 1:
-                raise ValueError("Nomad now only supports 1D shape.")
-            elif len(shape) == 0 :
+                raise ValueError("PyNomad now only supports 1D shape.")
+            elif len(shape) == 0:
                 dim += 1
+                lb.append(val.interval()[0])
+                ub.append(val.interval()[1])
                 lb_string += str(val.interval()[0]) + ' '
                 ub_string += str(val.interval()[1]) + ' '
                 if val.type == 'real':
@@ -119,48 +137,89 @@ class nomad(BaseAlgorithm):
                 elif val.type == 'integer' :
                     bb_input_type_string += 'I '
                 else :
-                    raise ValueError("PyNomad now only real and integer type ")
-            else :
+                    raise ValueError("PyNomad now only accepts real and integer type ")
+            else:
                 dim += shape[0]
                 for s in range(shape[0]):
+                    lb.append(val.interval()[0])
+                    ub.append(val.interval()[1])
                     lb_string += str(val.interval()[0]) + ' '
                     ub_string += str(val.interval()[1]) + ' '
                     if val.type == 'real':
                         bb_input_type_string += 'R '
-                        all_variables_are_granular = False
+                        # all_variables_are_granular = False
                     elif val.type == 'integer' :
                         bb_input_type_string += 'I '
                     else :
-                        raise ValueError("PyNomad now only real and integer type ")
+                        raise ValueError("PyNomad now only accepts real and integer type ")
 
         dimension_string += str(dim)
         lb_string += ' )'
         ub_string += ' )'
         bb_input_type_string += ' )'
 
-        # Todo constraints
-        bbo_type_string = 'BB_OUTPUT_TYPE OBJ '
 
-        self.cache_file_name = 'cache.txt'
+        # Manages x0 obtained by the Algorithm configuration: dictionary {'x': 0.1, 'y': 0.4} -> must be consistent with space (dimension, input_type)
+        # TODO handle multiple points
+        self.x0_transformed = list()
+        point = list()
+        if self.x0 is not None:
+            assert type(self.x0) is dict, "PyNomad: x0 must be provided as a dictionary"
+            for val in self.space.values():
+                point.append(self.x0[val.name[1:]])
+
+            assert len(point) == dim, "PyNomad: x0 dimension must be consistent with variable definition"
+
+            # Transform the x0 provided in user space into the optimization space.
+            # Suggest provide points in optimization space
+            for i in range(dim):
+                transformed_val_i = self.space.transform(point)[i]
+                if type(transformed_val_i) == int or type(transformed_val_i) == float:
+                    self.x0_transformed.append(transformed_val_i)
+                else:
+                    self.x0_transformed.append(transformed_val_i.tolist())
+
+            assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
+
+        if not self.x0 and self.initial_lh_eval_n_factor == 0:
+            raise ValueError("PyNomad needs an initial phase: provide x0 or initial_lh_eval_n_factor>0 ")
+
+        # Bb output types for nomad
+        bbo_type_string = 'BB_OUTPUT_TYPE '+self.bb_output_type
+        # Need to keep the indices for observe
+        list_of_bb_output_type = self.bb_output_type.split()
+        self.index_objective_in_bb_output = list()
+        self.index_constraint_in_bb_output = list()
+        for idx, single_output_type in enumerate(list_of_bb_output_type):
+            if single_output_type == 'OBJ':
+                self.index_objective_in_bb_output.append(idx)
+            elif single_output_type == 'PB' or single_output_type == 'EB' or single_output_type == 'CSTR':
+                self.index_constraint_in_bb_output.append(idx)
+            else:
+                raise ValueError("PyNomad: a valid bb_output_type containing OBJ, CSTR, PB or EB keywords is required")
+        assert len(self.index_objective_in_bb_output) > 0, "PyNomad: at least an objective must be provided in bb_output_type"
+
+        # use pid to have a unique cache name for each orion PyNomad running in parallel
+        self.cache_file_name = 'cache.'+self.pidstr+'.txt'
         if os.path.exists(self.cache_file_name):
             os.remove(self.cache_file_name)
         cache_file_string = 'CACHE_FILE '+self.cache_file_name
 
         suggest_algo = 'MEGA_SEARCH_POLL yes' # Mads MegaSearchPoll for suggest after first suggest
-        first_suggest_algo = 'LH_EVAL ' + str(len(self.space.values())*2)
+
+        first_suggest_algo = 'LH_EVAL ' + str(dim*self.initial_lh_eval_n_factor)
 
         # IMPORTANT
-        # Seed is managed explicitely with PyNomad.setSeed. Do not pass SEED as a parameter
+        # Seed is managed explicitly with PyNomad.setSeed. Do not pass SEED as a parameter
 
-        # if all_variables_are_granular:
-        #    self.max_calls_to_extra_suggest = 100 * pow(3,len(self.space.values())) # This value is MAX_EVAL in Nomad when all variables are granular
-        #else :
-        self.max_calls_to_extra_suggest = 10 # This is arbitrary
+        self.max_calls_to_extra_suggest = 1 # This is arbitrary  # TODO make this a PyNomad parameter
 
+        # If x0 is defined the first suggest is to provide x0 (initial params is not used)
+        # + additional LH samples if required (initial params is used)
         self.initial_params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, first_suggest_algo ]
         self.params = ['DISPLAY_DEGREE 2', dimension_string, bb_input_type_string, bbo_type_string,lb_string, ub_string, cache_file_string, suggest_algo ]
 
-        # print(self.initial_params, self.params)
+        # print("Initialize ( ", self.pidstr," ):", self.initial_params, self.params)
 
         # list to keep candidates for an evaluation
         self.stored_candidates = list()
@@ -178,7 +237,7 @@ class nomad(BaseAlgorithm):
         PyNomad.setSeed(seed)
         self.rng_state = PyNomad.getRNGState()
 
-        # print("Seed rng: ", seed,self.rng_state)
+        # print("Seed rng: ", self.pidstr, seed, self.rng_state)
 
 
     @property
@@ -186,9 +245,9 @@ class nomad(BaseAlgorithm):
         """Return a state dict that can be used to reset the state of the algorithm."""
 
         self.rng_state = PyNomad.getRNGState()
+        # print("State dict ( ", self.pidstr," ):", self.rng_state)
 
         return {'rng_state': self.rng_state, "_trials_info": copy.deepcopy(self._trials_info)}
-
 
     def set_state(self, state_dict):
         """Reset the state of the algorithm based on the given state_dict
@@ -199,7 +258,7 @@ class nomad(BaseAlgorithm):
         self.rng_state = state_dict["rng_state"]
         self._trials_info = state_dict.get("_trials_info")
 
-        # print("Set state : ",state_dict)
+        # print("Set state ( ", self.pidstr," ):", state_dict)
         PyNomad.setRNGState(self.rng_state)
 
     def suggest(self, num=None):
@@ -230,37 +289,59 @@ class nomad(BaseAlgorithm):
 
 
         # print('Use initial params : ' , self.use_initial_params)
-        # print('RNG State: ',self.rng_state)
+        # print('Suggest RNG State: ',self.rng_state)
 
         if self.use_initial_params:
-            # print("Params for suggest:",self.initial_params)
-            self.stored_candidates = PyNomad.suggest(self.initial_params)
+            if self.x0_transformed:
+                self.stored_candidates.append(self.x0_transformed)
+                # print("x0 is the first suggest")
+            else:
+                # print("Initial Params for suggest:",self.initial_params)
+                self.stored_candidates = PyNomad.suggest(self.initial_params)
         else:
-            print("Params for suggest:", self.params)
+            # print("Params for suggest:", self.params)
             self.stored_candidates = PyNomad.suggest(self.params)
 
         #print("Suggest: ",self.stored_candidates)
 
         # extra suggest with LH to force suggest of candidates
         nb_suggest_tries = 0
-        while len(self.stored_candidates) == 0 and nb_suggest_tries < self.max_calls_to_extra_suggest:
-            self.stored_candidates = PyNomad.suggest(self.initial_params)
-            nb_suggest_tries += 1
-            #print("Extra Suggest (LH): ",self.stored_candidates)
+        if self.initial_lh_eval_n_factor > 0:
+            while len(self.stored_candidates) < num and nb_suggest_tries < self.max_calls_to_extra_suggest:
+                self.stored_candidates.extend(x for x in PyNomad.suggest(self.initial_params) if x not in self.stored_candidates) # make sure to not add duplicate points
+                nb_suggest_tries += 1
+                #print("Extra Suggest (LH): ",self.stored_candidates)
 
         # assert len(self.stored_candidates) > 0, "At least one candidate must be provided !"
 
-        # Todo manage prior conversion : candidates -> samples
+        # manage prior conversion : candidates -> samples
         samples = []
         for point in self.stored_candidates:
+            # print(point)
+
+            # Convert to integer if necessary and assert that value is not changed
+            for i in range(len(point)):
+                if self.space.values()[i].type == 'integer':
+                    intVal=int(point[i])
+                    assert intVal==point[i], 'PyNomad Suggest: point must be integer'
+                    point[i]=intVal
+
             point = regroup_dims(point, self.space)
-            samples.append(point)
-            # if len(samples) >= num:   # return the number requested.
-            #    break;
+            if point not in samples:
+                self.register(point)
+                samples.append(point)
+            if len(samples) >= num:   # return the number requested.
+                break;
 
         num = len(samples)
         self.no_candidates_suggested = (num == 0 )
-        return samples
+
+        # print("Suggest samples ( ", self.pidstr," ):", samples)
+
+        if samples:
+           return samples
+
+        return None
 
     def observe(self, points, results):
         """Observe evaluation `results` corresponding to list of `points` in
@@ -290,12 +371,12 @@ class nomad(BaseAlgorithm):
            or equal to zero by the problem's definition.
 
         """
-        assert len(points) == len(results), "The length of results and points are not the same"
+        assert len(points) == len(results), "PyNomad observe: The length of results and points are not the same"
 
-        # print('observe, use_first_params=',self.use_initial_params)
+        #print('observe, use_first_params=',self.use_initial_params)
         candidates_outputs = list()
         candidates = list()
-        for point, result in zip(points, results):
+        for point, single_result in zip(points, results):
 
             #if not self.has_suggested(point):
             #    logger.info(
@@ -304,35 +385,61 @@ class nomad(BaseAlgorithm):
             #    )
             #    continue
             tmp_outputs = list()
-            tmp_outputs.append(result['objective']) # TODO constraints
 
-            candidates_outputs.append(tmp_outputs) # TODO constraints
+            # Append the results in the same order as in bb_output_type
+            list_objective_result = [single_result['objective']] if type(single_result['objective']) is not list \
+                                     else single_result['objective']
+            for idx, index_item in enumerate(self.index_objective_in_bb_output):
+                tmp_outputs.insert(index_item, list_objective_result[idx])
+
+            #print(point, single_result)
+            if 'constraint' in single_result:
+                list_constraint_result = [single_result['constraint']] if type(single_result['constraint']) is not list\
+                                          else single_result['constraint']
+                # Manage empty constraint value -> inf
+                flag_no_constraint = False
+                if len(list_constraint_result) != len(self.index_constraint_in_bb_output):
+                    flag_no_constraint = True
+                for idx, index_item in enumerate(self.index_constraint_in_bb_output):
+                    tmp_outputs.insert(index_item, float('inf') if flag_no_constraint else list_constraint_result[idx])
+
+            candidates_outputs.append(tmp_outputs)
             flat_point = flatten_dims(point,self.space)
             flat_point_tuple = list()
             for x in flat_point:
-                 flat_point_tuple.append(x)
+                 #print(type(x))
+                 if type(x)==numpy.ndarray:
+                    assert x.size==1, "PyNomad observe: The length of the ndarray should be one"
+                    flat_point_tuple.append(numpy.float64(x))
+                 else:
+                    flat_point_tuple.append(x)
             candidates.append(flat_point_tuple)
 
-        #print("Call PyNomad observe")
-        #print(candidates_outputs)
-        #print(candidates)
+        # print("Call PyNomad observe")
+        # print("Observe ( ", self.pidstr," ) outputs:", candidates_outputs)
+        # print("Observe ( ", self.pidstr," ) candidates:", candidates)
 
         if self.use_initial_params:
-             updatedParams = PyNomad.observe(self.initial_params,candidates,candidates_outputs,self.cache_file_name)
+             # print("Initial params:",self.initial_params)
+             updatedParams = PyNomad.observe(self.initial_params, candidates, candidates_outputs, self.cache_file_name)
              self.use_initial_params = False  # after initial observe we use only params
         else:
-            updatedParams = PyNomad.observe(self.params,candidates,candidates_outputs,self.cache_file_name)
+             updatedParams = PyNomad.observe(self.params, candidates, candidates_outputs, self.cache_file_name)
 
-    	# Decode bytes into string
+
+        super(nomad, self).observe(points, results) 
+
+
+        # Decode bytes into string
         for i in range(len(updatedParams)):
             updatedParams[i] = updatedParams[i].decode('utf-8')
         for i in range(len(self.params)):
             if type(self.params[i]) is bytes:
                 self.params[i] = self.params[i].decode('utf-8')
 
-        # print("Updated parameters by observe:\n",updatedParams)
+        # print("Updated parameters by observe( ", self.pidstr," )\n",updatedParams)
 
-    	# Replace updated params in params OR add if not present
+        # Replace updated params in params OR add if not present
         for i in range(len(updatedParams)):
             split1 = updatedParams[i].split()
             found = False
@@ -341,7 +448,7 @@ class nomad(BaseAlgorithm):
                 if ( split2[0].upper() == split1[0].upper() ):
                     self.params[j] = updatedParams[i]
                     found = True
-                    break;
+                    break
             if not found:
                 self.params.append(updatedParams[i])
 

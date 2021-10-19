@@ -9,8 +9,8 @@ from orion.client import report_results
 
 
 def rosenbrock_function(x,y):
-    """Evaluate a 1-D rosenbrock like function."""
-    summands = 100 * (x - x**2)**2 + (1 - x)**2
+    """Evaluate a 2-D rosenbrock like function."""
+    summands = 100 * (x - x**2)**2 + (1 - x)**2 + y**2
     return summands 
 
 
@@ -20,11 +20,12 @@ def execute():
     parser = argparse.ArgumentParser()
     parser.add_argument('-x', type=float, required=True,
                         help="Representation of a floating number")
+    parser.add_argument('-y', type=float, required=True)
 
     inputs = parser.parse_args()
 
     # 2. Perform computations
-    f = rosenbrock_function(inputs.x)
+    f = rosenbrock_function(inputs.x, inputs.y)
 
     # 3. Gather and report results
     results = list()
