@@ -15,7 +15,8 @@ import numpy
 import os
 
 from orion.algo.base import BaseAlgorithm
-from orion.core.utils.flatten import flatten
+# from orion.core.utils.flatten import flatten
+from orion.core.utils import format_trials
 #from orion.core.utils.points import flatten_dims, regroup_dims
 # from orion.analysis.base import flatten_params, regroup_params
 
@@ -106,7 +107,7 @@ class nomad(BaseAlgorithm):
         bb_input_type_string = 'BB_INPUT_TYPE ( '
         lb = list()
         ub = list()
-        for val in self.space.values():
+        for val in space.values():
             if val.type == "fidelity" :
                 raise ValueError( "PyNomad does not support fidelity type" )
 
@@ -164,10 +165,10 @@ class nomad(BaseAlgorithm):
         # Manages x0 obtained by the Algorithm configuration: dictionary {'x': 0.1, 'y': 0.4} -> must be consistent with space (dimension, input_type)
         # TODO handle multiple points
 
+
         if not self.x0 and self.initial_lh_eval_n_factor == 0:
             raise ValueError("PyNomad needs an initial phase: provide x0 or initial_lh_eval_n_factor>0 ")
 
-        self.x0_transformed = list()
         if self.x0 is not None:
             assert type(self.x0) is dict, "PyNomad: x0 must be provided as a dictionary"
             #for val in self.space.values():
@@ -177,7 +178,7 @@ class nomad(BaseAlgorithm):
 
             # Transform the x0 provided in user space into the optimization space.
             # Suggest get points in optimization space and pass them to PyNomad.suggest
-            flatten_point = flatten(self.x0)
+            trial = format_trials.dict_to_trial(self.x0, space)
 
             #for i in range(dim):
             #    transformed_point = tuple(
@@ -187,8 +188,9 @@ class nomad(BaseAlgorithm):
             #        self.x0_transformed.append(transformed_val_i)
             #    else:
             #        self.x0_transformed.append(transformed_val_i.tolist())
-            for val in self.space.values():
-                self.x0_transformed.append(flatten_point[val.name[1:]])
+            #for val in self.space.values():
+            #    self.x0_transformed.append(flatten_point[val.name[1:]])
+            self.x0_transformed = list(format_trials.trial_to_tuple(trial, space))
 
             assert len(self.x0_transformed) == dim, "PyNomad: x0 dimension must be consistent with variable definition"
             assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
@@ -337,9 +339,12 @@ class nomad(BaseAlgorithm):
                     point[i]=intVal
 
             # point = regroup_dims(point, self.space)
-            if point not in samples:
-                self.register(point)
-                samples.append(point)
+            trial = format_trials.tuple_to_trial(point, self.space)
+            if not self.has_suggested(trial):
+                self.register(trial)
+            #if point not in samples:
+            #    self.register(point)
+                samples.append(trial)
             if len(samples) >= num:   # return the number requested.
                 break;
 
