@@ -164,4 +164,5 @@ def test_is_done_max_trials(self):
 # test_optimizer_choices_and_uniform()
 #test=Testnomad()
 #test_is_done_max_trials(test)
-test_optimizer_constraint()
+#test_optimizer_constraint()
+test_optimizer_choices_and_uniform()

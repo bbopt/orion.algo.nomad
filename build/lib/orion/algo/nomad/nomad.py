@@ -15,10 +15,7 @@ import numpy
 import os
 
 from orion.algo.base import BaseAlgorithm
-# from orion.core.utils.flatten import flatten
-from orion.core.utils import format_trials
-#from orion.core.utils.points import flatten_dims, regroup_dims
-# from orion.analysis.base import flatten_params, regroup_params
+from orion.core.utils.points import flatten_dims, regroup_dims
 
 import PyNomad
 
@@ -97,7 +94,7 @@ class nomad(BaseAlgorithm):
         # TODO try to convert precision give to Real parameters into granularity.
         # This must consider upper and lower bounds. Not so easy!
 
-        # Dimension, bounds and bb_input_type for flattened space
+        # Dimension, bounds and bb_input_type  for flattened space
         # X0 is not set as a Nomad parameters
         dim = 0
         dimension_string = 'DIMENSION '
@@ -107,7 +104,7 @@ class nomad(BaseAlgorithm):
         bb_input_type_string = 'BB_INPUT_TYPE ( '
         lb = list()
         ub = list()
-        for val in space.values():
+        for val in self.space.values():
             if val.type == "fidelity" :
                 raise ValueError( "PyNomad does not support fidelity type" )
 
@@ -164,37 +161,28 @@ class nomad(BaseAlgorithm):
 
         # Manages x0 obtained by the Algorithm configuration: dictionary {'x': 0.1, 'y': 0.4} -> must be consistent with space (dimension, input_type)
         # TODO handle multiple points
+        self.x0_transformed = list()
+        point = list()
+        if self.x0 is not None:
+            assert type(self.x0) is dict, "PyNomad: x0 must be provided as a dictionary"
+            for val in self.space.values():
+                point.append(self.x0[val.name[1:]])
 
+            assert len(point) == dim, "PyNomad: x0 dimension must be consistent with variable definition"
+
+            # Transform the x0 provided in user space into the optimization space.
+            # Suggest provide points in optimization space
+            for i in range(dim):
+                transformed_val_i = self.space.transform(point)[i]
+                if type(transformed_val_i) == int or type(transformed_val_i) == float:
+                    self.x0_transformed.append(transformed_val_i)
+                else:
+                    self.x0_transformed.append(transformed_val_i.tolist())
+
+            assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
 
         if not self.x0 and self.initial_lh_eval_n_factor == 0:
             raise ValueError("PyNomad needs an initial phase: provide x0 or initial_lh_eval_n_factor>0 ")
-
-        if self.x0 is not None:
-            assert type(self.x0) is dict, "PyNomad: x0 must be provided as a dictionary"
-            #for val in self.space.values():
-            #    point.append(self.x0[val.name[1:]])
-
-            #assert len(point) == dim, "PyNomad: x0 dimension must be consistent with variable definition"
-
-            # Transform the x0 provided in user space into the optimization space.
-            # Suggest get points in optimization space and pass them to PyNomad.suggest
-            trial = format_trials.dict_to_trial(self.x0, space)
-
-            #for i in range(dim):
-            #    transformed_point = tuple(
-            #        dim.transform(flatten(trial.params)[name]) for name, dim in self.items()
-            #    transformed_val_i = self.space.transform(point)[i]
-            #    if type(transformed_val_i) == int or type(transformed_val_i) == float:
-            #        self.x0_transformed.append(transformed_val_i)
-            #    else:
-            #        self.x0_transformed.append(transformed_val_i.tolist())
-            #for val in self.space.values():
-            #    self.x0_transformed.append(flatten_point[val.name[1:]])
-            self.x0_transformed = list(format_trials.trial_to_tuple(trial, space))
-
-            assert len(self.x0_transformed) == dim, "PyNomad: x0 dimension must be consistent with variable definition"
-            assert ub >= self.x0_transformed >= lb, "x0 must be within bounds"
-
 
         # Bb output types for nomad
         bbo_type_string = 'BB_OUTPUT_TYPE '+self.bb_output_type
@@ -304,10 +292,10 @@ class nomad(BaseAlgorithm):
         # print('Suggest RNG State: ',self.rng_state)
 
         if self.use_initial_params:
-            if self.x0_transformed:  # X0 was given
+            if self.x0_transformed:
                 self.stored_candidates.append(self.x0_transformed)
                 # print("x0 is the first suggest")
-            else: # LH_INITIAL
+            else:
                 # print("Initial Params for suggest:",self.initial_params)
                 self.stored_candidates = PyNomad.suggest(self.initial_params)
         else:
@@ -338,13 +326,10 @@ class nomad(BaseAlgorithm):
                     assert intVal==point[i], 'PyNomad Suggest: point must be integer'
                     point[i]=intVal
 
-            # point = regroup_dims(point, self.space)
-            trial = format_trials.tuple_to_trial(point, self.space)
-            if not self.has_suggested(trial):
-                self.register(trial)
-            #if point not in samples:
-            #    self.register(point)
-                samples.append(trial)
+            point = regroup_dims(point, self.space)
+            if point not in samples:
+                self.register(point)
+                samples.append(point)
             if len(samples) >= num:   # return the number requested.
                 break;
 
@@ -419,8 +404,7 @@ class nomad(BaseAlgorithm):
                     tmp_outputs.insert(index_item, float('inf') if flag_no_constraint else list_constraint_result[idx])
 
             candidates_outputs.append(tmp_outputs)
-            # flat_point = flatten_dims(point,self.space)
-            flat_point = point
+            flat_point = flatten_dims(point,self.space)
             flat_point_tuple = list()
             for x in flat_point:
                  #print(type(x))

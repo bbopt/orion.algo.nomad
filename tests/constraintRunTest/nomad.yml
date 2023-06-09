@@ -5,7 +5,7 @@ experiment:
       nomad:
         seed: 1
         initial_lh_eval_n_factor: 3 
-        x0: {'x': 0.5, 'y': 0.5}
+        x0: {'/x': 0.5, '/y': 0.5}
         mega_search_poll: True
         bb_output_type: 'PB OBJ PB'
 
