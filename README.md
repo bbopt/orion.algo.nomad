@@ -1,5 +1,7 @@
 # orion.algo.nomad
-Nomad plugin for Oríon.
+Nomad plugin for Oríon. 
+
+https://github.com/Epistimio/orion
 
 To install into Orion
 pip install -e .
